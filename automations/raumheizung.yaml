@@ -1,0 +1,1145 @@
+blueprint:
+  name: "Bau & Smart – Raumheizung"
+  description: >-
+    Raumweise Heizungssteuerung für Fußbodenheizung und Heizkörper.
+    Eine Instanz pro Raum (bzw. pro Regelzone).
+
+    Der Blueprint steuert eine `climate`-Entität – nie den Aktor direkt.
+    Das Takten übernimmt der Regler (Thermostatkopf, generic_thermostat, PID-Thermostat).
+
+    Prioritätenkette (höher gewinnt immer):
+    1. Heizperiode aus
+    2. Fenster offen
+    3. Sensor-Wächter (Notbetrieb)
+    4. Manueller Eingriff
+    5. Hausmodus (Urlaub / Abwesend / freie Stufen)
+    6. Zeitplan (Komfort / Eco)
+    7. Frostschutz als Untergrenze
+
+    Alles Optionale darf leer bleiben – fehlende Fensterkontakte, kein Zeitplan,
+    keine Modus-Quelle: der Blueprint überspringt die zugehörige Logik.
+
+    Doku: https://github.com/BauUndSmart/ha-blueprints/blob/main/docs/raumheizung.md
+  domain: automation
+  source_url: https://github.com/BauUndSmart/ha-blueprints/blob/main/automations/raumheizung.yaml
+  homeassistant:
+    min_version: "2026.9.0"
+
+  input:
+
+    # ------------------------------------------------------------------
+    sek_raum:
+      name: "1 · Raum & Regelung"
+      icon: mdi:home-thermometer
+      collapsed: false
+      input:
+        regler:
+          name: "Regler (climate-Entität)"
+          description: >-
+            Thermostatkopf, generic_thermostat oder PID-Thermostat.
+            Beim Heiztyp "nur manuell" wird diese Entität nicht angesteuert,
+            muss aber trotzdem ausgewählt werden.
+          selector:
+            entity:
+              filter:
+                domain: climate
+
+        heiztyp:
+          name: "Heiztyp"
+          description: >-
+            Fußbodenheizung: träge, zweistufige Fensterlogik.
+            Heizkörper: schnell, Fenster wirkt sofort.
+            Nur manuell: kein Eingriff, nur Meldungen (z. B. mechanisches Thermostat).
+          default: heizkoerper
+          selector:
+            select:
+              options:
+                - label: "Fußbodenheizung"
+                  value: fussbodenheizung
+                - label: "Heizkörper"
+                  value: heizkoerper
+                - label: "Nur manuell (nur Meldungen)"
+                  value: manuell
+
+        raumsensor:
+          name: "Raumtemperatursensor"
+          description: >-
+            Ist-Wert für Wächter und Fensterlogik. Leer lassen schaltet beides ab.
+            Empfehlung: ein Helfer vom Typ "Sensorwerte kombinieren" mit mehreren Quellen –
+            siehe docs/ersatzsensor.md
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: sensor
+                device_class: temperature
+
+        notbetrieb_aktor:
+          name: "Aktor für Notbetrieb (optional)"
+          description: >-
+            NUR bei Software-Reglern (generic_thermostat, PID) ausfüllen, die ohne
+            Sensor nicht mehr regeln. Ist hier etwas eingetragen, behandelt der
+            Blueprint den Regler als Software-Regler und taktet bei Sensorausfall
+            diesen Schalter. Leer lassen bei Thermostatköpfen.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: switch
+
+        status_helper:
+          name: "Status-Helfer (optional, empfohlen)"
+          description: >-
+            Ein input_text-Helfer pro Raum. Macht Override, letzte Stufe und
+            Fensterzeiten neustartfest. Ohne ihn startet der Raum nach einem
+            HA-Neustart "frisch". Nicht von Hand bearbeiten.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: input_text
+
+    # ------------------------------------------------------------------
+    sek_haus:
+      name: "2 · Haus (in allen Instanzen gleich auswählen)"
+      icon: mdi:home-group
+      collapsed: true
+      input:
+        heizperiode:
+          name: "Heizperiode (Schalter)"
+          description: "Aus = Heizung aus bzw. Frostschutz. Leer = immer Heizperiode."
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: input_boolean
+
+        aussensensor:
+          name: "Außentemperatur"
+          description: >-
+            Steuert die Fenster-Zeitschwellen und die Notbetriebs-Kennlinie.
+            Leer = mittlere Schwelle und fester Notbetriebs-Anteil.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: sensor
+                device_class: temperature
+
+        modus_quelle:
+          name: "Modus-Quelle"
+          description: >-
+            Beliebige Entität, deren Zustand die Heizstufe bestimmt – ein
+            Auswahl-Helfer, ein select oder direkt eine Alarmanlage.
+            Leer = nur Zeitplan (Komfort/Eco).
+          default: []
+          selector:
+            entity:
+              multiple: true
+
+    # ------------------------------------------------------------------
+    sek_stufen:
+      name: "3 · Stufen & Sollwerte"
+      icon: mdi:thermometer-lines
+      collapsed: true
+      input:
+        komfort_temp:
+          name: "Komfort – Sollwert"
+          default: 21
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        komfort_helper:
+          name: "Komfort – Helfer (überschreibt den Sollwert)"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        komfort_states:
+          name: "Komfort – Zustände der Modus-Quelle"
+          description: 'z. B. "Zuhause" · bei Alarmanlagen: disarmed, armed_home'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        eco_temp:
+          name: "Eco/Nacht – Sollwert"
+          default: 18
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        eco_helper:
+          name: "Eco/Nacht – Helfer"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        eco_states:
+          name: "Eco/Nacht – Zustände der Modus-Quelle"
+          description: 'z. B. "Nacht" · armed_night'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        abwesend_temp:
+          name: "Abwesend – Sollwert"
+          default: 17
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        abwesend_helper:
+          name: "Abwesend – Helfer"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        abwesend_states:
+          name: "Abwesend – Zustände der Modus-Quelle"
+          description: 'z. B. "Abwesend" · armed_away'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        urlaub_temp:
+          name: "Urlaub – Sollwert"
+          default: 15
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        urlaub_helper:
+          name: "Urlaub – Helfer"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        urlaub_states:
+          name: "Urlaub – Zustände der Modus-Quelle"
+          description: 'z. B. "Urlaub" · armed_vacation'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        frei1_temp:
+          name: "Freie Stufe 1 – Sollwert"
+          description: "Nur aktiv, wenn unten Zustände eingetragen sind."
+          default: 20
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        frei1_helper:
+          name: "Freie Stufe 1 – Helfer"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        frei1_states:
+          name: "Freie Stufe 1 – Zustände der Modus-Quelle"
+          description: 'z. B. "Gäste", "Party", armed_custom_bypass'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        frei2_temp:
+          name: "Freie Stufe 2 – Sollwert"
+          default: 20
+          selector:
+            number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+        frei2_helper:
+          name: "Freie Stufe 2 – Helfer"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_number}}
+        frei2_states:
+          name: "Freie Stufe 2 – Zustände der Modus-Quelle"
+          default: []
+          selector:
+            text: {multiple: true}
+
+        frostschutz_temp:
+          name: "Frostschutz – Sollwert"
+          description: "Gilt immer als Untergrenze und als Fensteraktion."
+          default: 7
+          selector:
+            number: {min: 0, max: 15, step: 0.5, unit_of_measurement: "°C", mode: box}
+
+        unbekannt_verhalten:
+          name: "Modus-Quelle in unbekanntem Zustand"
+          description: >-
+            Fängt kurze Zwischenzustände ab (arming, pending, Neustart).
+          default: letzte_stufe
+          selector:
+            select:
+              options:
+                - label: "Letzte Stufe halten, nach Zeitlimit Ersatzstufe"
+                  value: letzte_stufe
+                - label: "Sofort Ersatzstufe"
+                  value: ersatzstufe
+
+        unbekannt_limit:
+          name: "Zeitlimit für unbekannten Zustand"
+          default: 60
+          selector:
+            number: {min: 1, max: 1440, step: 1, unit_of_measurement: "min", mode: box}
+
+        ersatzstufe:
+          name: "Ersatzstufe"
+          description: "Greift, wenn der unbekannte Zustand zu lange dauert."
+          default: eco
+          selector:
+            select:
+              options: [komfort, eco, abwesend, urlaub, frostschutz]
+
+        sonderbereich:
+          name: "Sonderbereich erlauben (0–45 °C)"
+          description: >-
+            Standard begrenzt alle Sollwerte auf 5–30 °C. Einschalten nur für
+            Spezialfälle (Terrarium, Anzucht, frostfreies Gewächshaus).
+            ACHTUNG: hebt den Schutz gegen Fehleingaben auf.
+          default: false
+          selector:
+            boolean:
+
+    # ------------------------------------------------------------------
+    sek_zeitplan:
+      name: "4 · Zeitplan"
+      icon: mdi:calendar-clock
+      collapsed: true
+      input:
+        zeitplan_helper:
+          name: "Zeitplan-Helfer"
+          description: >-
+            Aktiv = Komfort, inaktiv = Eco. Kennt Wochentage.
+            Hat Vorrang vor den Uhrzeit-Helfern. Beide leer = dauerhaft Komfort.
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: schedule}}
+        komfort_ab:
+          name: "Komfort ab (einfache Variante)"
+          description: "Täglich gleich, kein Unterschied Werktag/Wochenende."
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_datetime}}
+        eco_ab:
+          name: "Eco ab (einfache Variante)"
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: input_datetime}}
+
+    # ------------------------------------------------------------------
+    sek_fenster:
+      name: "5 · Fenster"
+      icon: mdi:window-open-variant
+      collapsed: true
+      input:
+        fenstersensoren:
+          name: "Fenstersensoren"
+          description: >-
+            Mehrere möglich – "eines offen" gilt als offen.
+            Leer lassen, solange noch keine Kontakte verbaut sind.
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: binary_sensor}}
+
+        fensteraktion:
+          name: "Aktion bei offenem Fenster"
+          description: >-
+            "Nur melden" ist richtig bei mechanischen Thermostaten und bei
+            Köpfen mit eigener Fenster-auf-Erkennung.
+          default: frostschutz
+          selector:
+            select:
+              options:
+                - label: "Auf Frostschutz-Sollwert"
+                  value: frostschutz
+                - label: "Heizung aus"
+                  value: aus
+                - label: "Nur melden"
+                  value: melden
+
+        oeffnungsverzoegerung:
+          name: "Heizkörper: Öffnungsverzögerung"
+          description: "Ignoriert kurzes Öffnen."
+          default: 60
+          selector:
+            number: {min: 0, max: 900, step: 10, unit_of_measurement: "s", mode: box}
+
+        schliessverzoegerung:
+          name: "Heizkörper: Schließverzögerung"
+          default: 30
+          selector:
+            number: {min: 0, max: 900, step: 10, unit_of_measurement: "s", mode: box}
+
+        fbh_schwelle_warm:
+          name: "FBH-Hinweis über 10 °C außen"
+          default: 30
+          selector:
+            number: {min: 1, max: 240, step: 1, unit_of_measurement: "min", mode: box}
+        fbh_schwelle_mittel:
+          name: "FBH-Hinweis 0 bis 10 °C außen"
+          default: 15
+          selector:
+            number: {min: 1, max: 240, step: 1, unit_of_measurement: "min", mode: box}
+        fbh_schwelle_kalt:
+          name: "FBH-Hinweis unter 0 °C außen"
+          default: 10
+          selector:
+            number: {min: 1, max: 240, step: 1, unit_of_measurement: "min", mode: box}
+        fbh_abfall_hinweis:
+          name: "FBH-Hinweis bei Temperaturabfall"
+          description: "Alternativ zur Zeitschwelle – was zuerst eintritt, gilt."
+          default: 1.5
+          selector:
+            number: {min: 0.1, max: 10, step: 0.1, unit_of_measurement: "K", mode: box}
+        fbh_eingriff_faktor:
+          name: "FBH-Eingriff: Faktor auf die Hinweisschwelle"
+          default: 2
+          selector:
+            number: {min: 1, max: 10, step: 0.5, mode: box}
+        fbh_abfall_eingriff:
+          name: "FBH-Eingriff bei Temperaturabfall"
+          default: 3.0
+          selector:
+            number: {min: 0.1, max: 15, step: 0.1, unit_of_measurement: "K", mode: box}
+
+    # ------------------------------------------------------------------
+    sek_manuell:
+      name: "6 · Manueller Eingriff"
+      icon: mdi:hand-back-right
+      collapsed: true
+      input:
+        override_verhalten:
+          name: "Wie lange gilt eine Änderung von Hand?"
+          default: bis_schaltpunkt
+          selector:
+            select:
+              options:
+                - label: "Bis zum nächsten Zeitplan-Schaltpunkt"
+                  value: bis_schaltpunkt
+                - label: "Feste Dauer"
+                  value: feste_dauer
+                - label: "Bis zum nächsten Moduswechsel"
+                  value: bis_moduswechsel
+                - label: "Nicht zulassen (sofort zurücksetzen)"
+                  value: nicht_zulassen
+        override_dauer:
+          name: "Feste Dauer"
+          default: 3
+          selector:
+            number: {min: 1, max: 48, step: 1, unit_of_measurement: "h", mode: box}
+
+    # ------------------------------------------------------------------
+    sek_waechter:
+      name: "7 · Sensor-Wächter & Notbetrieb"
+      icon: mdi:shield-alert
+      collapsed: true
+      input:
+        veraltet_nach:
+          name: "Sensor gilt als ausgefallen nach"
+          description: "Zigbee-Sensoren melden oft nur bei Änderung – nicht zu knapp wählen."
+          default: 3
+          selector:
+            number: {min: 0.5, max: 48, step: 0.5, unit_of_measurement: "h", mode: box}
+        plausibel_min:
+          name: "Plausibel ab"
+          default: 5
+          selector:
+            number: {min: -50, max: 50, step: 1, unit_of_measurement: "°C", mode: box}
+        plausibel_max:
+          name: "Plausibel bis"
+          default: 35
+          selector:
+            number: {min: 0, max: 100, step: 1, unit_of_measurement: "°C", mode: box}
+        notbetrieb_zyklus:
+          name: "Notbetrieb: Taktzyklus"
+          description: >-
+            Nur wirksam, wenn ein Notbetrieb-Aktor eingetragen ist.
+            Die Taktung läuft über Zeitfenster statt über Wartezeiten – sie übersteht
+            damit auch einen Neustart. Auflösung 5 min, deshalb nicht zu kurz wählen.
+          default: 60
+          selector:
+            number: {min: 15, max: 120, step: 5, unit_of_measurement: "min", mode: box}
+        unavailable_meldung_nach:
+          name: "Regler nicht erreichbar: melden nach"
+          description: "Verhindert Alarm bei kurzen Funk-Aussetzern."
+          default: 15
+          selector:
+            number: {min: 1, max: 240, step: 1, unit_of_measurement: "min", mode: box}
+        quittierung:
+          name: "Befehls-Quittierung"
+          description: >-
+            Prüft nach jedem Sollwert-Befehl, ob der Regler ihn übernommen hat,
+            und sendet bei Bedarf erneut. Besonders nützlich bei Zigbee-Köpfen.
+          default: true
+          selector:
+            boolean:
+
+    # ------------------------------------------------------------------
+    sek_meldungen:
+      name: "8 · Meldungen"
+      icon: mdi:bell-outline
+      collapsed: true
+      input:
+        meldung_aktion:
+          name: "Meldung senden"
+          description: >-
+            Deine eigene Benachrichtigungs-Aktion. Verfügbare Variablen:
+            {{ meldung }}, {{ meldung_titel }}, {{ meldung_kritisch }}, {{ raumname }}.
+            Leer lassen = keine Meldungen.
+          default: []
+          selector:
+            action:
+        ruhezeit_aktiv:
+          name: "Ruhezeit verwenden"
+          description: "In der Ruhezeit kommt nur Kritisches durch."
+          default: true
+          selector:
+            boolean:
+        ruhezeit_von:
+          name: "Ruhezeit von"
+          default: "22:00:00"
+          selector:
+            time:
+        ruhezeit_bis:
+          name: "Ruhezeit bis"
+          default: "07:00:00"
+          selector:
+            time:
+
+# ======================================================================
+
+mode: restart
+max_exceeded: silent
+
+triggers:
+  - trigger: homeassistant
+    event: start
+    id: start
+  - trigger: event
+    event_type: automation_reloaded
+    id: start
+  - trigger: state
+    entity_id: !input regler
+    attribute: temperature
+    id: regler
+  - trigger: state
+    entity_id: !input regler
+    to: ["unavailable", "unknown"]
+    id: regler_weg
+  - trigger: state
+    entity_id: !input raumsensor
+    id: sensor
+  - trigger: state
+    entity_id: !input fenstersensoren
+    id: fenster
+  - trigger: state
+    entity_id: !input modus_quelle
+    id: modus
+  - trigger: state
+    entity_id: !input heizperiode
+    id: heizperiode
+  - trigger: state
+    entity_id: !input zeitplan_helper
+    id: zeitplan
+  - trigger: state
+    entity_id: !input komfort_ab
+    id: zeitplan
+  - trigger: state
+    entity_id: !input eco_ab
+    id: zeitplan
+  - trigger: state
+    entity_id: !input komfort_helper
+    id: sollwert
+  - trigger: state
+    entity_id: !input eco_helper
+    id: sollwert
+  - trigger: state
+    entity_id: !input abwesend_helper
+    id: sollwert
+  - trigger: state
+    entity_id: !input urlaub_helper
+    id: sollwert
+  - trigger: state
+    entity_id: !input frei1_helper
+    id: sollwert
+  - trigger: state
+    entity_id: !input frei2_helper
+    id: sollwert
+  - trigger: time_pattern
+    minutes: "/5"
+    id: zyklus
+
+variables:
+  # ---- Eingaben einsammeln ------------------------------------------
+  i_regler: !input regler
+  i_heiztyp: !input heiztyp
+  l_raumsensor: !input raumsensor
+  l_notaktor: !input notbetrieb_aktor
+  l_status: !input status_helper
+  l_heizperiode: !input heizperiode
+  l_aussen: !input aussensensor
+  l_modus: !input modus_quelle
+  l_fenster: !input fenstersensoren
+  l_zeitplan: !input zeitplan_helper
+  l_komfort_ab: !input komfort_ab
+  l_eco_ab: !input eco_ab
+
+  t_komfort: !input komfort_temp
+  t_eco: !input eco_temp
+  t_abwesend: !input abwesend_temp
+  t_urlaub: !input urlaub_temp
+  t_frei1: !input frei1_temp
+  t_frei2: !input frei2_temp
+  t_frost: !input frostschutz_temp
+
+  h_komfort: !input komfort_helper
+  h_eco: !input eco_helper
+  h_abwesend: !input abwesend_helper
+  h_urlaub: !input urlaub_helper
+  h_frei1: !input frei1_helper
+  h_frei2: !input frei2_helper
+
+  s_komfort: !input komfort_states
+  s_eco: !input eco_states
+  s_abwesend: !input abwesend_states
+  s_urlaub: !input urlaub_states
+  s_frei1: !input frei1_states
+  s_frei2: !input frei2_states
+
+  i_unbekannt_verhalten: !input unbekannt_verhalten
+  i_unbekannt_limit: !input unbekannt_limit
+  i_ersatzstufe: !input ersatzstufe
+  i_sonderbereich: !input sonderbereich
+
+  i_fensteraktion: !input fensteraktion
+  i_oeffnung_s: !input oeffnungsverzoegerung
+  i_schliessen_s: !input schliessverzoegerung
+  i_fbh_warm: !input fbh_schwelle_warm
+  i_fbh_mittel: !input fbh_schwelle_mittel
+  i_fbh_kalt: !input fbh_schwelle_kalt
+  i_fbh_abfall1: !input fbh_abfall_hinweis
+  i_fbh_faktor: !input fbh_eingriff_faktor
+  i_fbh_abfall2: !input fbh_abfall_eingriff
+
+  i_override: !input override_verhalten
+  i_override_h: !input override_dauer
+
+  i_veraltet_h: !input veraltet_nach
+  i_plaus_min: !input plausibel_min
+  i_plaus_max: !input plausibel_max
+  i_takt_min: !input notbetrieb_zyklus
+  i_unavail_min: !input unavailable_meldung_nach
+  i_quittierung: !input quittierung
+
+  i_ruhe_aktiv: !input ruhezeit_aktiv
+  i_ruhe_von: !input ruhezeit_von
+  i_ruhe_bis: !input ruhezeit_bis
+
+  # ---- Einzel-Entitäten aus den Listen ------------------------------
+  e_sensor: "{{ l_raumsensor | first | default('', true) }}"
+  e_notaktor: "{{ l_notaktor | first | default('', true) }}"
+  e_status: "{{ l_status | first | default('', true) }}"
+  e_heizperiode: "{{ l_heizperiode | first | default('', true) }}"
+  e_aussen: "{{ l_aussen | first | default('', true) }}"
+  e_modus: "{{ l_modus | first | default('', true) }}"
+  e_zeitplan: "{{ l_zeitplan | first | default('', true) }}"
+  e_komfort_ab: "{{ l_komfort_ab | first | default('', true) }}"
+  e_eco_ab: "{{ l_eco_ab | first | default('', true) }}"
+
+  raumname: >-
+    {{ area_name(i_regler) or state_attr(i_regler, 'friendly_name') or i_regler }}
+  jetzt: "{{ now().timestamp() | int }}"
+
+  # ---- Status-Helfer lesen ------------------------------------------
+  status: >-
+    {% set s = states(e_status) if e_status != '' else '' %}
+    {% if s is string and s.startswith('{') and s.endswith('}') %}
+      {{ s | from_json }}
+    {% else %}
+      {{ {} }}
+    {% endif %}
+
+  # ---- Sensor --------------------------------------------------------
+  ist_temp: >-
+    {{ states(e_sensor) | float(none) if e_sensor != '' else none }}
+  sensor_alter_h: >-
+    {% if e_sensor == '' or states[e_sensor] is none %}
+      999
+    {% else %}
+      {{ ((now() - states[e_sensor].last_updated).total_seconds() / 3600) | round(3) }}
+    {% endif %}
+  sensor_ok: >-
+    {{ e_sensor == '' or (ist_temp is not none
+       and ist_temp >= i_plaus_min | float
+       and ist_temp <= i_plaus_max | float
+       and sensor_alter_h | float < i_veraltet_h | float) }}
+  waechter_aktiv: "{{ e_sensor != '' }}"
+  notbetrieb: "{{ waechter_aktiv and not sensor_ok }}"
+
+  aussen_temp: >-
+    {{ states(e_aussen) | float(none) if e_aussen != '' else none }}
+
+  # ---- Regler --------------------------------------------------------
+  regler_da: "{{ states(i_regler) not in ['unavailable', 'unknown'] }}"
+  regler_weg_min: >-
+    {% if states(i_regler) in ['unavailable', 'unknown'] and states[i_regler] is not none %}
+      {{ ((now() - states[i_regler].last_changed).total_seconds() / 60) | round(1) }}
+    {% else %}
+      0
+    {% endif %}
+  regler_modus: "{{ states(i_regler) }}"
+  regler_soll: "{{ state_attr(i_regler, 'temperature') | float(none) }}"
+  regler_heizt: "{{ state_attr(i_regler, 'hvac_action') == 'heating' }}"
+  regler_kann_aus: >-
+    {{ 'off' in (state_attr(i_regler, 'hvac_modes') | default([], true)) }}
+
+  # ---- Heizperiode ---------------------------------------------------
+  heizperiode_an: >-
+    {{ true if e_heizperiode == '' else is_state(e_heizperiode, 'on') }}
+
+  # ---- Fenster -------------------------------------------------------
+  fenster_vorhanden: "{{ l_fenster | count > 0 }}"
+  fenster_offen: >-
+    {{ fenster_vorhanden and (l_fenster | expand | selectattr('state', 'eq', 'on') | list | count) > 0 }}
+  fenster_seit: >-
+    {% if fenster_offen %}
+      {{ (l_fenster | expand | selectattr('state', 'eq', 'on')
+          | map(attribute='last_changed') | list | min).timestamp() | int }}
+    {% else %}
+      0
+    {% endif %}
+  fenster_zu_seit: >-
+    {% if fenster_vorhanden and not fenster_offen %}
+      {{ (l_fenster | expand | map(attribute='last_changed') | list | max).timestamp() | int }}
+    {% else %}
+      0
+    {% endif %}
+  fenster_dauer_min: >-
+    {{ ((jetzt | int - fenster_seit | int) / 60) | round(1) if fenster_offen else 0 }}
+
+  fbh_schwelle_min: >-
+    {% if aussen_temp is none %}{{ i_fbh_mittel }}
+    {% elif aussen_temp > 10 %}{{ i_fbh_warm }}
+    {% elif aussen_temp >= 0 %}{{ i_fbh_mittel }}
+    {% else %}{{ i_fbh_kalt }}{% endif %}
+
+  temp_bei_oeffnung: >-
+    {{ status.get('wt', none) }}
+  temp_abfall: >-
+    {% if temp_bei_oeffnung is not none and ist_temp is not none and fenster_offen %}
+      {{ (temp_bei_oeffnung | float - ist_temp | float) | round(2) }}
+    {% else %}
+      0
+    {% endif %}
+
+  fbh_hinweis: >-
+    {{ i_heiztyp == 'fussbodenheizung' and fenster_offen and regler_heizt
+       and (fenster_dauer_min | float >= fbh_schwelle_min | float
+            or temp_abfall | float >= i_fbh_abfall1 | float) }}
+  fbh_eingriff: >-
+    {{ i_heiztyp == 'fussbodenheizung' and fenster_offen
+       and (fenster_dauer_min | float >= (fbh_schwelle_min | float * i_fbh_faktor | float)
+            or temp_abfall | float >= i_fbh_abfall2 | float) }}
+  hk_eingriff: >-
+    {{ i_heiztyp == 'heizkoerper' and fenster_offen
+       and (jetzt | int - fenster_seit | int) >= i_oeffnung_s | int }}
+  hk_frei: >-
+    {{ i_heiztyp != 'heizkoerper' or not fenster_vorhanden or fenster_offen
+       or fenster_zu_seit == 0
+       or (jetzt | int - fenster_zu_seit | int) >= i_schliessen_s | int }}
+
+  fenster_greift: >-
+    {{ i_fensteraktion != 'melden' and i_heiztyp != 'manuell'
+       and ((fbh_eingriff) or (hk_eingriff and hk_frei)) }}
+
+  # ---- Modus-Quelle --------------------------------------------------
+  modus_state: "{{ states(e_modus) if e_modus != '' else '' }}"
+  stufe_modus: >-
+    {% if e_modus == '' %}keine
+    {% elif modus_state in (s_urlaub | default([], true)) %}urlaub
+    {% elif modus_state in (s_abwesend | default([], true)) %}abwesend
+    {% elif modus_state in (s_frei1 | default([], true)) %}frei1
+    {% elif modus_state in (s_frei2 | default([], true)) %}frei2
+    {% elif modus_state in (s_eco | default([], true)) %}eco
+    {% elif modus_state in (s_komfort | default([], true)) %}komfort
+    {% else %}unbekannt{% endif %}
+
+  unbekannt_seit: "{{ status.get('us', 0) | int(0) }}"
+
+  # ---- Zeitplan ------------------------------------------------------
+  stufe_zeitplan: >-
+    {% if e_zeitplan != '' %}
+      {{ 'komfort' if is_state(e_zeitplan, 'on') else 'eco' }}
+    {% elif e_komfort_ab != '' and e_eco_ab != '' %}
+      {% set n = now().strftime('%H:%M:%S') %}
+      {% set k = states(e_komfort_ab) %}
+      {% set c = states(e_eco_ab) %}
+      {% if k < c %}
+        {{ 'komfort' if (n >= k and n < c) else 'eco' }}
+      {% else %}
+        {{ 'eco' if (n >= c and n < k) else 'komfort' }}
+      {% endif %}
+    {% else %}
+      komfort
+    {% endif %}
+
+  # ---- Stufe final ---------------------------------------------------
+  stufe_roh: >-
+    {% if stufe_modus in ['keine', 'komfort'] %}{{ stufe_zeitplan }}
+    {% else %}{{ stufe_modus }}{% endif %}
+
+  stufe: >-
+    {% if stufe_roh != 'unbekannt' %}{{ stufe_roh }}
+    {% elif i_unbekannt_verhalten == 'ersatzstufe' %}{{ i_ersatzstufe }}
+    {% elif unbekannt_seit | int > 0
+            and (jetzt | int - unbekannt_seit | int) > (i_unbekannt_limit | int * 60) %}{{ i_ersatzstufe }}
+    {% else %}{{ status.get('st', i_ersatzstufe) }}{% endif %}
+
+  ersatzstufe_greift: >-
+    {{ stufe_roh == 'unbekannt' and stufe == i_ersatzstufe
+       and (i_unbekannt_verhalten == 'ersatzstufe'
+            or (unbekannt_seit | int > 0
+                and (jetzt | int - unbekannt_seit | int) > (i_unbekannt_limit | int * 60))) }}
+
+  # ---- Sollwert der Stufe --------------------------------------------
+  soll_stufe: >-
+    {% if stufe == 'komfort' %}
+      {{ states(h_komfort | first) | float(t_komfort) if h_komfort | count > 0 else t_komfort }}
+    {% elif stufe == 'eco' %}
+      {{ states(h_eco | first) | float(t_eco) if h_eco | count > 0 else t_eco }}
+    {% elif stufe == 'abwesend' %}
+      {{ states(h_abwesend | first) | float(t_abwesend) if h_abwesend | count > 0 else t_abwesend }}
+    {% elif stufe == 'urlaub' %}
+      {{ states(h_urlaub | first) | float(t_urlaub) if h_urlaub | count > 0 else t_urlaub }}
+    {% elif stufe == 'frei1' %}
+      {{ states(h_frei1 | first) | float(t_frei1) if h_frei1 | count > 0 else t_frei1 }}
+    {% elif stufe == 'frei2' %}
+      {{ states(h_frei2 | first) | float(t_frei2) if h_frei2 | count > 0 else t_frei2 }}
+    {% else %}
+      {{ t_frost }}
+    {% endif %}
+
+  # ---- Manueller Eingriff --------------------------------------------
+  ov_temp: "{{ status.get('ov', none) }}"
+  ov_bis: "{{ status.get('ou', 0) | int(0) }}"
+  ov_stufe: "{{ status.get('os', '') }}"
+  override_aktiv: >-
+    {{ i_override != 'nicht_zulassen' and ov_temp is not none
+       and (ov_bis | int == 0 or jetzt | int < ov_bis | int)
+       and not (i_override == 'bis_moduswechsel' and ov_stufe != '' and ov_stufe != stufe) }}
+
+  # ---- Grenzen -------------------------------------------------------
+  g_min: "{{ 0 if i_sonderbereich else 5 }}"
+  g_max: "{{ 45 if i_sonderbereich else 30 }}"
+
+  # ---- Zielzustand (Prioritätenkette) --------------------------------
+  ziel_grund: >-
+    {% if not heizperiode_an %}heizperiode
+    {% elif fenster_greift %}fenster
+    {% elif notbetrieb %}notbetrieb
+    {% elif override_aktiv %}manuell
+    {% else %}{{ stufe }}{% endif %}
+
+  ziel_aus: >-
+    {{ (ziel_grund == 'heizperiode' or (ziel_grund == 'fenster' and i_fensteraktion == 'aus'))
+       and regler_kann_aus }}
+
+  ziel_temp_roh: >-
+    {% if ziel_grund in ['heizperiode', 'fenster'] %}{{ t_frost }}
+    {% elif ziel_grund == 'notbetrieb' %}{{ soll_stufe }}
+    {% elif ziel_grund == 'manuell' %}{{ ov_temp }}
+    {% else %}{{ soll_stufe }}{% endif %}
+
+  ziel_temp: >-
+    {{ [[ziel_temp_roh | float(t_frost), t_frost | float] | max, g_max | float] | min
+       if ziel_grund not in ['heizperiode', 'fenster']
+       else [[ziel_temp_roh | float(t_frost), g_min | float] | max, g_max | float] | min }}
+
+  # ---- Notbetrieb-Takten ---------------------------------------------
+  takt_anteil: >-
+    {% if aussen_temp is none %}25
+    {% elif aussen_temp >= 15 %}0
+    {% elif aussen_temp >= 10 %}{{ (15 - (aussen_temp - 10) * 3) | round(0) }}
+    {% elif aussen_temp >= 5 %}{{ (25 - (aussen_temp - 5) * 2) | round(0) }}
+    {% elif aussen_temp >= 0 %}{{ (35 - (aussen_temp) * 2) | round(0) }}
+    {% elif aussen_temp >= -10 %}{{ (35 - aussen_temp * 1.5) | round(0) }}
+    {% else %}50{% endif %}
+  # Zeitfenster-Taktung: ohne Wartezeit, dadurch neustart- und absturzsicher.
+  # Position in der laufenden Taktperiode, abgeleitet aus der Uhrzeit.
+  takt_pos_min: >-
+    {{ ((now().hour * 60 + now().minute) % (i_takt_min | int)) }}
+  # auf das 5-Minuten-Raster der Neubewertung gerundet, sonst überschießt die Taktung
+  takt_an_min: >-
+    {{ ((((i_takt_min | int) * (takt_anteil | float / 100)) / 5) | round(0)) * 5 }}
+  takt_an: >-
+    {{ takt_anteil | float > 0 and takt_pos_min | float < takt_an_min | float }}
+
+  # ---- Meldungen -----------------------------------------------------
+  ruhezeit_jetzt: >-
+    {% if not i_ruhe_aktiv %}false
+    {% else %}
+      {% set n = now().strftime('%H:%M:%S') %}
+      {% if i_ruhe_von < i_ruhe_bis %}
+        {{ n >= i_ruhe_von and n < i_ruhe_bis }}
+      {% else %}
+        {{ n >= i_ruhe_von or n < i_ruhe_bis }}
+      {% endif %}
+    {% endif %}
+
+  meldung_key: >-
+    {% if not regler_da and regler_weg_min | float >= i_unavail_min | float %}regler_weg
+    {% elif notbetrieb and e_notaktor != '' %}not_takt
+    {% elif notbetrieb %}not_meld
+    {% elif ersatzstufe_greift %}modus
+    {% elif fenster_offen and aussen_temp is not none and aussen_temp < 0 %}fenster_kalt
+    {% elif fbh_eingriff or (hk_eingriff and i_fensteraktion == 'melden') %}fenster_eingriff
+    {% elif fbh_hinweis %}fenster_hinweis
+    {% else %}{% endif %}
+
+  meldung_kritisch: >-
+    {{ meldung_key in ['regler_weg', 'not_takt', 'not_meld', 'modus', 'fenster_kalt'] }}
+
+  meldung_titel: "Heizung {{ raumname }}"
+
+  meldung: >-
+    {% if meldung_key == 'regler_weg' %}
+      Der Regler ist seit über {{ i_unavail_min }} Minuten nicht erreichbar. Bitte prüfen.
+    {% elif meldung_key == 'not_takt' %}
+      Temperatursensor ausgefallen. Notbetrieb aktiv ({{ takt_anteil }} % Heizleistung).
+    {% elif meldung_key == 'not_meld' %}
+      Temperatursensor ausgefallen. Der Regler übernimmt den Notbetrieb selbst.
+    {% elif meldung_key == 'modus' %}
+      Die Modus-Quelle meldet seit über {{ i_unbekannt_limit }} min einen unbekannten
+      Zustand ({{ modus_state }}). Es gilt jetzt die Ersatzstufe {{ i_ersatzstufe }}.
+    {% elif meldung_key == 'fenster_kalt' %}
+      Fenster offen bei {{ aussen_temp }} °C Außentemperatur.
+    {% elif meldung_key == 'fenster_eingriff' %}
+      Fenster seit {{ fenster_dauer_min | round(0) }} min offen – die Heizung wurde heruntergeregelt.
+    {% elif meldung_key == 'fenster_hinweis' %}
+      Fenster seit {{ fenster_dauer_min | round(0) }} min offen und die Fußbodenheizung läuft.
+    {% else %}{% endif %}
+
+  meldung_senden: >-
+    {{ meldung_key != ''
+       and meldung_key != status.get('n', '')
+       and (meldung_kritisch or not ruhezeit_jetzt) }}
+
+  # ---- Neuer Status --------------------------------------------------
+  neu_wt: >-
+    {% if not fenster_offen %}{{ none }}
+    {% elif temp_bei_oeffnung is not none %}{{ temp_bei_oeffnung }}
+    {% else %}{{ ist_temp }}{% endif %}
+  neu_us: >-
+    {% if stufe_roh != 'unbekannt' %}0
+    {% elif unbekannt_seit | int > 0 %}{{ unbekannt_seit }}
+    {% else %}{{ jetzt }}{% endif %}
+
+actions:
+
+  # ==================================================================
+  # A) Manuellen Eingriff am Regler erkennen und merken
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id | default('') == 'regler' }}"
+          - condition: template
+            value_template: >-
+              {{ trigger.to_state is defined
+                 and trigger.to_state.context.parent_id is none
+                 and trigger.to_state.context.id != this.context.id }}
+          - condition: template
+            value_template: "{{ state_attr(i_regler, 'temperature') is not none }}"
+          - condition: template
+            value_template: >-
+              {{ heizperiode_an and not fenster_greift and not notbetrieb }}
+        sequence:
+          # Variante "nicht zulassen": sofort zurücksetzen
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ i_override == 'nicht_zulassen' }}"
+                sequence:
+                  - action: climate.set_temperature
+                    target:
+                      entity_id: !input regler
+                    data:
+                      temperature: "{{ ziel_temp }}"
+                  - stop: "Manueller Eingriff nicht zugelassen – zurückgesetzt"
+          # sonst merken
+          - variables:
+              neu_ov: "{{ state_attr(i_regler, 'temperature') | float }}"
+              neu_ou: >-
+                {% if i_override == 'feste_dauer' %}
+                  {{ jetzt | int + (i_override_h | int * 3600) }}
+                {% elif i_override == 'bis_schaltpunkt' %}
+                  0
+                {% else %}
+                  0
+                {% endif %}
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ e_status != '' }}"
+                sequence:
+                  - action: input_text.set_value
+                    target:
+                      entity_id: "{{ e_status }}"
+                    data:
+                      value: >-
+                        {{ {'v': 1, 'st': stufe, 'ov': neu_ov, 'ou': neu_ou | int,
+                            'os': stufe, 'wo': fenster_seit | int, 'wt': neu_wt,
+                            'us': neu_us | int, 'n': status.get('n', '')} | to_json }}
+          - stop: "Manueller Eingriff übernommen"
+
+  # ==================================================================
+  # B) Regler nicht erreichbar: nur melden (Block E), nichts ansteuern
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not regler_da and meldung_key != 'regler_weg' }}"
+        sequence:
+          - stop: "Regler nicht erreichbar – Meldefrist läuft noch"
+
+  # ==================================================================
+  # C) Notbetrieb mit Aktor-Takten (Software-Regler ohne Sensor)
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ notbetrieb and e_notaktor != '' and heizperiode_an and not fenster_greift }}"
+        sequence:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ regler_kann_aus and regler_modus != 'off' }}"
+                sequence:
+                  - action: climate.set_hvac_mode
+                    target:
+                      entity_id: !input regler
+                    data:
+                      hvac_mode: "off"
+          # Zeitfenster-Taktung ohne delay: bei jedem Durchlauf wird nur der
+          # Soll-Zustand gesetzt. Ein Neustart kann den Aktor nicht "an" stehen lassen.
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ takt_an and not is_state(e_notaktor, 'on') }}"
+                sequence:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "{{ e_notaktor }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not takt_an and not is_state(e_notaktor, 'off') }}"
+                sequence:
+                  - action: switch.turn_off
+                    target:
+                      entity_id: "{{ e_notaktor }}"
+
+  # ==================================================================
+  # D) Normalbetrieb: Zielzustand anwenden
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ i_heiztyp != 'manuell' and regler_da and not (notbetrieb and e_notaktor != '') }}"
+        sequence:
+          # Heizung aus?
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ ziel_aus }}"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ regler_modus != 'off' }}"
+                        sequence:
+                          - action: climate.set_hvac_mode
+                            target:
+                              entity_id: !input regler
+                            data:
+                              hvac_mode: "off"
+            default:
+              # Regler wieder einschalten, falls er aus war
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ regler_modus == 'off' }}"
+                    sequence:
+                      - action: climate.set_hvac_mode
+                        target:
+                          entity_id: !input regler
+                        data:
+                          hvac_mode: heat
+              # Sollwert nur schreiben, wenn er abweicht
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ regler_soll is none
+                             or (regler_soll | float - ziel_temp | float) | abs >= 0.1 }}
+                    sequence:
+                      - action: climate.set_temperature
+                        target:
+                          entity_id: !input regler
+                        data:
+                          temperature: "{{ ziel_temp }}"
+                      # Quittierung
+                      - choose:
+                          - conditions:
+                              - condition: template
+                                value_template: "{{ i_quittierung }}"
+                            sequence:
+                              - wait_template: >-
+                                  {{ (state_attr(i_regler, 'temperature') | float(-999)
+                                      - ziel_temp | float) | abs < 0.1 }}
+                                timeout:
+                                  minutes: 2
+                                continue_on_timeout: true
+                              - choose:
+                                  - conditions:
+                                      - condition: template
+                                        value_template: >-
+                                          {{ (state_attr(i_regler, 'temperature') | float(-999)
+                                              - ziel_temp | float) | abs >= 0.1 }}
+                                    sequence:
+                                      - action: climate.set_temperature
+                                        target:
+                                          entity_id: !input regler
+                                        data:
+                                          temperature: "{{ ziel_temp }}"
+                                      - wait_template: >-
+                                          {{ (state_attr(i_regler, 'temperature') | float(-999)
+                                              - ziel_temp | float) | abs < 0.1 }}
+                                        timeout:
+                                          minutes: 3
+                                        continue_on_timeout: true
+
+  # ==================================================================
+  # E) Meldung senden
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ meldung_senden }}"
+        sequence: !input meldung_aktion
+
+  # ==================================================================
+  # F) Status-Helfer fortschreiben
+  # ==================================================================
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ e_status != '' }}"
+        sequence:
+          - action: input_text.set_value
+            target:
+              entity_id: "{{ e_status }}"
+            data:
+              value: >-
+                {{ {'v': 1,
+                    'st': stufe,
+                    'ov': (ov_temp if override_aktiv else none),
+                    'ou': (ov_bis | int if override_aktiv else 0),
+                    'os': (ov_stufe if override_aktiv else ''),
+                    'wo': fenster_seit | int,
+                    'wt': neu_wt,
+                    'us': neu_us | int,
+                    'n': meldung_key} | to_json }}
