@@ -1,7 +1,7 @@
 # Home Assistant Blueprints von Bau & Smart
 
 Blueprints, die ich für mein eigenes Haus gebaut habe und die deshalb am lebenden
-Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.com).
+Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.com) (sooon).
 
 ---
 
@@ -12,6 +12,8 @@ Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.c
 Eine Instanz pro Raum. Der Blueprint steuert eine `climate`-Entität – nie den Aktor
 direkt. Das Takten übernimmt der Regler, egal ob Thermostatkopf, `generic_thermostat`
 aus Home-Assistant-Core oder ein PID-Thermostat.
+
+Die aktuelle Version ist noch WIP und wird noch weitere Verbesserungen erhalten. Wer aber die Vorabversion ziehen möchte, have fun:
 
 [![Blueprint importieren](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/BauUndSmart/ha-blueprints/blob/main/automations/raumheizung.yaml)
 
