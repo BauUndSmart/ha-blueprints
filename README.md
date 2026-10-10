@@ -17,6 +17,28 @@ Die aktuelle Version ist noch WIP und wird noch weitere Verbesserungen erhalten.
 
 [![Blueprint importieren](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/BauUndSmart/ha-blueprints/blob/main/automations/raumheizung.yaml)
 
+<details>
+<summary>Der Knopf tut nichts? So geht es von Hand</summary>
+
+Home Assistant liest die Import-Adresse nur beim **ersten** Aufbau der
+Blueprint-Seite aus. War die Seite in derselben Sitzung schon offen, wird der
+Parameter stillschweigend ignoriert und es passiert gar nichts. Ein frischer
+Browser-Tab löst das meistens.
+
+Wenn nicht, geht es direkt:
+
+1. **Einstellungen → Automationen & Szenen → Blaupausen**
+2. unten rechts auf **Blaupause importieren**
+3. diese Adresse einfügen und bestätigen:
+   ```
+   https://github.com/BauUndSmart/ha-blueprints/blob/main/automations/raumheizung.yaml
+   ```
+
+Der Dialog lädt die Vorschau übrigens nicht von allein – erst nach dem Klick auf
+den Import-Knopf. Ein leer wirkendes Fenster ist also normal.
+
+</details>
+
 ### Was er macht
 
 - **Zwei Heiztyp-Pfade:** Fußbodenheizung (träge, zweistufige Fensterlogik) und
@@ -25,6 +47,11 @@ Die aktuelle Version ist noch WIP und wird noch weitere Verbesserungen erhalten.
   jede mit Sollwert und optionalem Helfer
 - **Modus-Quelle frei wählbar:** ein Auswahl-Helfer, ein `select` oder direkt die
   Alarmanlage. Zu jeder Stufe trägt man ein, bei welchen Zuständen sie gilt
+- **Kalender statt Schalter:** Stufen für einen Zeitraum vorausplanen – Feier,
+  Dienstreise, Urlaub, Ferienwohnungs-Buchung. Ein Termin hat Anfang und Ende und
+  lässt sich von Leuten pflegen, die Home Assistant nie öffnen
+- **Vorlauf und Nachlauf:** träge Räume fangen rechtzeitig an und hören rechtzeitig
+  auf. Minuten pro Raum oder ein geteilter Helfer für alle Räume einer Bauart
 - **Fensterlogik, nach Außentemperatur gestaffelt:** je kälter, desto früher die
   Meldung. Bei der Fußbodenheizung erst ein Hinweis, erst später ein Eingriff
 - **Sensor-Wächter mit Notbetrieb:** erkennt tote, veraltete und unplausible Sensoren
@@ -44,9 +71,13 @@ Die höhere Ebene gewinnt immer. Am Ende steht genau ein Zielzustand.
 | 2 | Fenster offen | gewählte Fensteraktion |
 | 3 | Sensor-Wächter | Notbetrieb |
 | 4 | Manueller Eingriff | Nutzer-Sollwert bis Ablauf |
-| 5 | Hausmodus | Urlaub / Abwesend / Frei 1 / Frei 2 |
-| 6 | Zeitplan | Komfort (aktiv) / Eco (inaktiv) |
-| 7 | Untergrenze | Frostschutz gilt immer als Minimum |
+| 5 | Kalender | Stufe des laufenden Termins |
+| 6 | Hausmodus | Urlaub / Abwesend / Frei 1 / Frei 2 |
+| 7 | Zeitplan | Komfort (aktiv) / Eco (inaktiv) |
+| 8 | Untergrenze | Frostschutz gilt immer als Minimum |
+
+Vorlauf und Nachlauf stehen nicht in der Kette – sie verschieben nur, *ab wann* eine
+Stufe der Ebenen 5 bis 7 gilt.
 
 ### Leitprinzipien
 
@@ -74,7 +105,11 @@ Ein Blueprint kann keine Helfer erzeugen. Je nachdem, was du nutzen willst:
 | Modus-Quelle | `input_select` | hausweit oder je Wohneinheit |
 | Sollwerte | `input_number` | je Stufe, wenn am Dashboard änderbar |
 | Zeitplan | `schedule` | je Wohneinheit oder Raum |
+| Vorlaufzeit | `input_number` **in Minuten** | optional, einer je Heizungsbauart |
 | **Status-Helfer** | `input_text`, **Maximallänge 255** | je Raum |
+
+Ein Kalender ist kein Helfer – dafür reicht jeder Kalender, den Home Assistant schon
+kennt (Google, CalDAV, ICS, lokal).
 
 > ⚠️ **Der Status-Helfer braucht Maximallänge 255.** Home Assistant legt `input_text`
 > standardmäßig mit 100 Zeichen an – das reicht nicht, und der Status wird dann

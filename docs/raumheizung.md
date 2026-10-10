@@ -10,13 +10,14 @@ Zurück zur [Übersicht](../README.md)
 2. [Vor dem Import: Helfer anlegen](#vor-dem-import-helfer-anlegen)
 3. [Der Einrichtungsdialog, Feld für Feld](#der-einrichtungsdialog-feld-für-feld)
 4. [Wie die Logik entscheidet](#wie-die-logik-entscheidet)
-5. [Fensterlogik im Detail](#fensterlogik-im-detail)
-6. [Sensor-Wächter und Notbetrieb](#sensor-wächter-und-notbetrieb)
-7. [Manueller Eingriff](#manueller-eingriff)
-8. [Meldungen](#meldungen)
-9. [Beispiele](#beispiele)
-10. [Bekannte Grenzen](#bekannte-grenzen)
-11. [FAQ](#faq)
+5. [Vorlauf und Nachlauf](#vorlauf-und-nachlauf)
+6. [Fensterlogik im Detail](#fensterlogik-im-detail)
+7. [Sensor-Wächter und Notbetrieb](#sensor-wächter-und-notbetrieb)
+8. [Manueller Eingriff](#manueller-eingriff)
+9. [Meldungen](#meldungen)
+10. [Beispiele](#beispiele)
+11. [Bekannte Grenzen](#bekannte-grenzen)
+12. [FAQ](#faq)
 
 ---
 
@@ -116,6 +117,9 @@ Fehlersuche sofort, *warum* ein Raum gerade tut, was er tut.
 |---|---|---|
 | **Regler** | ja | Die `climate`-Entität. Auch beim Heiztyp „nur manuell" auszuwählen, sie wird dann aber nicht angesteuert. |
 | **Heiztyp** | ja | Entscheidet über die Fensterlogik – siehe unten. |
+| **Vorlaufzeit** | nein | Minuten. Siehe [Vorlauf und Nachlauf](#vorlauf-und-nachlauf). 0 = aus. |
+| **Vorlaufzeit – Helfer** | nein | `input_number` **in Minuten**. Überschreibt die Zahl darüber. |
+| **Nachlauf** | nein | Prozent der Vorlaufzeit. 0 = aus. |
 | **Raumtemperatursensor** | nein | Ist-Wert für Wächter und Fenster-Abfallerkennung. Leer = beides aus. |
 | **Aktor für Notbetrieb** | nein | **Nur bei Software-Reglern.** Siehe [Notbetrieb](#sensor-wächter-und-notbetrieb). |
 | **Status-Helfer** | nein | Siehe oben. |
@@ -132,11 +136,17 @@ Diese drei wählst du in *jeder* Instanz gleich aus.
 
 ### 3 · Stufen & Sollwerte
 
-Für jede Stufe gibt es drei Felder:
+Für jede Stufe gibt es vier Felder:
 
 - **Sollwert** – die Zahl, die gilt
 - **Helfer** – überschreibt die Zahl, wenn gesetzt
 - **Zustände der Modus-Quelle** – bei welchen Zuständen die Stufe greift
+- **Kalender-Stichwort** – bei welchem Termin die Stufe greift, siehe
+  [Kalender](#kalender)
+
+Die letzten beiden beantworten dieselbe Frage aus zwei Richtungen: „bei welchem
+Signal gelte ich". Der Zustand beschreibt das Jetzt, der Termin einen geplanten
+Zeitraum.
 
 | Stufe | Default | Typische Zustände |
 |---|---|---|
@@ -175,6 +185,36 @@ damit auch den Schutz gegen Zahlendreher auf.
 | beides leer | – | dauerhaft Komfort |
 
 Sind beide gesetzt, gewinnt der Zeitplan-Helfer.
+
+#### Kalender
+
+Ein Zeitplan beantwortet „wann ist es üblicherweise warm". Ein Kalender beantwortet
+„wann ist es diesmal anders". Das ist der Unterschied zur Modus-Quelle, die nur das
+Jetzt kennt: Ein Termin hat Anfang und Ende, lässt sich Wochen vorher eintragen und
+kann von Leuten gepflegt werden, die Home Assistant nie öffnen.
+
+Typische Fälle: eine Feier, Besuch über Weihnachten, eine Dienstreise, oder die
+Buchung einer Ferienwohnung.
+
+Welcher Termin welche Stufe auslöst, legst du über die **Kalender-Stichwörter** in
+Abschnitt 3 fest. Steht das Stichwort im Titel des Termins, gilt diese Stufe, solange
+der Termin läuft. Groß- und Kleinschreibung sind egal, Teiltreffer reichen.
+
+| Stichwörter | Wirkung |
+|---|---|
+| alle leer | **jeder** Termin im Kalender zählt als Komfort |
+| eines gesetzt | nur Termine mit diesem Wort lösen diese Stufe aus |
+| mehrere treffen | Urlaub → Abwesend → Frei 1 → Frei 2 → Eco → Komfort, der erste gewinnt |
+
+Der leere Fall ist Absicht: Wer einen eigenen Kalender „Heizung" anlegt, trägt dort
+Termine ein und muss sonst nichts konfigurieren.
+
+Ein laufender Termin gewinnt gegen die Modus-Quelle. Heizperiode, Fenster, Notbetrieb
+und manueller Eingriff gewinnen weiterhin gegen den Kalender.
+
+> **Grenze:** Eine Kalender-Entität in Home Assistant zeigt immer nur **einen** Termin
+> – den laufenden, und wenn keiner läuft, den nächsten. Überlappende Termine lassen
+> sich damit nicht auflösen. Wer das braucht, nimmt getrennte Kalender.
 
 ### 5 · Fenster
 
@@ -246,9 +286,13 @@ Bei jedem Durchlauf wird die ganze Kette neu bewertet. Die höhere Ebene gewinnt
 | 2 | Fenster offen | gewählte Fensteraktion |
 | 3 | Sensor-Wächter | Notbetrieb |
 | 4 | Manueller Eingriff | Nutzer-Sollwert bis Ablauf |
-| 5 | Hausmodus | Urlaub / Abwesend / Frei 1 / Frei 2 |
-| 6 | Zeitplan | Komfort / Eco |
-| 7 | Untergrenze | Frostschutz als Minimum |
+| 5 | Kalender | Stufe des laufenden Termins |
+| 6 | Hausmodus | Urlaub / Abwesend / Frei 1 / Frei 2 |
+| 7 | Zeitplan | Komfort / Eco |
+| 8 | Untergrenze | Frostschutz als Minimum |
+
+Vorlauf und Nachlauf stehen **nicht** in dieser Kette. Sie ändern nur, *welche* Stufe
+auf Ebene 5 bis 7 gilt – nie, ob Fenster, Notbetrieb oder Heizperiode greifen.
 
 **Fenster steht bewusst über dem Sensor-Wächter.** Bei offenem Fenster soll auch im
 Notbetrieb nicht geheizt werden.
@@ -259,9 +303,90 @@ um weniger als 0,1 K vom Ziel ab, passiert nichts. Das schont Batterien und Funk
 ### Wann er läuft
 
 - beim Start von Home Assistant und nach einem Neuladen der Automationen
-- bei jeder Änderung an Regler, Sensor, Fenster, Modus-Quelle, Zeitplan, Heizperiode
+- bei jeder Änderung an Regler, Sensor, Fenster, Modus-Quelle, Zeitplan, Kalender,
+  Vorlauf-Helfer, Heizperiode
   oder einem Sollwert-Helfer
 - alle 15 Minuten zur Sicherheit – das heilt verpasste Ereignisse
+
+---
+
+## Vorlauf und Nachlauf
+
+Eine Fußbodenheizung, die erst um sieben anfängt, ist um sieben nicht warm. Sie ist um
+elf warm. Der Vorlauf verschiebt den Start so weit nach vorn, dass der Raum zum
+Umschaltzeitpunkt die Temperatur schon hat.
+
+Der Nachlauf ist dasselbe rückwärts: rechtzeitig aufhören und die gespeicherte Wärme
+auslaufen lassen, statt bis zur letzten Minute zu heizen und danach wegzuwerfen.
+
+### Woher der Zeitpunkt kommt
+
+Vorlauf und Nachlauf brauchen einen **bekannten Zeitpunkt in der Zukunft**. Es gibt
+genau zwei Quellen:
+
+| Quelle | Zeitpunkt | Beispiel |
+|---|---|---|
+| **Zeitplan-Helfer** | nächster Wechsel | morgen 06:00 von Eco auf Komfort |
+| **Kalender** | Beginn des nächsten Termins | Anreise Ferienwohnung |
+| **Kalender** | Ende des laufenden Termins | Rückkehr aus dem Urlaub |
+
+Die Modus-Quelle hat keine Zukunft – ein Auswahl-Helfer weiß nicht, dass du morgen
+heimkommst. Ohne Zeitplan und ohne Kalender bleibt die Vorlaufzeit deshalb wirkungslos.
+Sie ist dann nicht kaputt, es gibt nur nichts, worauf sie vorlaufen könnte.
+
+Stehen beide Quellen an, gewinnt der **frühere** Zeitpunkt. Ist der vorbei, rückt der
+nächste nach.
+
+### Wann genau umgeschaltet wird
+
+Der Blueprint vergleicht die Sollwerte der aktuellen und der kommenden Stufe:
+
+| Richtung | Es greift | Fenster |
+|---|---|---|
+| kommende Stufe ist **wärmer** | Vorlauf | Vorlaufzeit vor dem Zeitpunkt |
+| kommende Stufe ist **kälter** | Nachlauf | Nachlaufzeit vor dem Zeitpunkt |
+| gleiche Stufe | nichts | – |
+
+Beide können sich nie gleichzeitig auslösen, weil die Richtung eindeutig ist.
+
+### Die Zahl oder der Helfer
+
+Die Vorlaufzeit ist eine Eigenschaft des Raums, nicht des Termins. Grobe Hausnummern:
+
+| Heizung | Vorlauf | Nachlauf bei 50 % |
+|---|---|---|
+| Estrich-Fußbodenheizung | 360–720 min | 180–360 min |
+| Trockenbau-Fußbodenheizung | 120–240 min | 60–120 min |
+| Heizkörper | 30–60 min | 15–30 min |
+
+Du kannst die Minuten pro Raum eintragen – oder einen `input_number`-Helfer wählen,
+den sich mehrere Räume teilen. Üblich ist einer für alle Fußbodenheizungen und einer
+für alle Heizkörper. Dann drehst du an einer Stelle statt an zwanzig.
+
+> ⚠️ **Der Helfer muss in Minuten sein**, nicht in Stunden. Bei den
+> Temperatur-Helfern ist °C selbsterklärend, hier nicht.
+
+Ist ein Helfer eingetragen, gilt **nur** der Helfer. Die Zahl im Feld darüber wird
+dann ignoriert, nie addiert.
+
+Der Nachlauf ist ein **Prozentsatz der Vorlaufzeit**, keine eigene Zahl. Auskühlen
+geht schneller als Aufheizen, und so skaliert er automatisch mit, wenn du am
+Vorlauf-Helfer drehst. 0 = aus, 50 ist ein brauchbarer Einstieg.
+
+### Warum das zusammenpasst
+
+Dein Urlaubsfall, Schritt für Schritt:
+
+1. Im Kalender steht „Urlaub" bis Sonntag 14:00.
+2. Solange der Termin läuft, gilt die Stufe Urlaub – 15 °C.
+3. Der Blueprint sieht das Ende des Termins als Umschaltzeitpunkt und weiß, was danach
+   gilt: das, was Modus-Quelle und Zeitplan ohne Kalender ergeben hätten.
+4. Bei 720 Minuten Vorlauf beginnt der Estrich Samstag um 02:00 zu heizen.
+5. Sonntag 14:00 ist der Raum warm, nicht erst Montag.
+
+Für eine Ferienwohnung läuft es andersherum: Der Buchungszeitraum steht im Kalender,
+der Vorlauf sorgt dafür, dass bei Anreise geheizt ist, und zwischen den Buchungen
+fällt das Haus auf die Grundstufe zurück.
 
 ---
 
@@ -438,6 +563,37 @@ Heiztyp:       Nur manuell
 Fenster:       binary_sensor.bad_fenster
 Fensteraktion: Nur melden
 ```
+
+### Beispiel 5: Ferienwohnung nach Buchungskalender
+
+Zwischen den Gästen steht das Haus auf 15 °C. Zur Anreise soll es warm sein, ohne
+dass jemand daran denken muss.
+
+```
+Regler:              climate.fewo_wohnzimmer
+Heiztyp:             Fußbodenheizung
+Vorlaufzeit-Helfer:  input_number.vorlauf_fussbodenheizung   (720 = 12 Stunden)
+Nachlauf:            50 %
+
+Kalender:            calendar.buchungen
+Komfort-Stichwort:   (leer – jede Buchung zählt)
+Urlaub – Sollwert:   15 °C
+Modus-Quelle:        (leer)
+Zeitplan:            (leer)
+Ersatzstufe:         Urlaub
+```
+
+Weil keine Modus-Quelle und kein Zeitplan gesetzt sind, fällt das Haus außerhalb der
+Buchungen auf die Grundstufe zurück. Ein laufender Buchungstermin hebt es auf
+Komfort, und der Vorlauf startet den Estrich zwölf Stunden vor Anreise.
+
+Beim Auschecken greift derselbe Mechanismus rückwärts: Sechs Stunden vor Buchungsende
+hört die Heizung auf und die Restwärme reicht bis zur Abreise.
+
+> Trägt der Vermieter die Buchungen ohnehin in einen Kalender ein, den Home Assistant
+> lesen kann, ist das die komplette Konfiguration. Siehe auch
+> [datenschutz.md](datenschutz.md), wenn fremde Haushalte mit in der Installation
+> hängen.
 
 ---
 

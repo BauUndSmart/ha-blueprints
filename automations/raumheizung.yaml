@@ -61,6 +61,70 @@ blueprint:
                 - label: "Nur manuell (nur Meldungen)"
                   value: manuell
 
+        vorlauf_min:
+          name: "Vorlaufzeit in Minuten"
+          description: >-
+            Wie früh dieser Raum anfangen soll, damit er zum Umschaltzeitpunkt
+            schon warm ist. Eine Eigenschaft des Raums, nicht des Termins:
+            Estrich-Fußbodenheizung braucht grob 360–720 Minuten, ein
+            Heizkörper 30–60.
+
+            Braucht einen bekannten Zeitpunkt in der Zukunft, also einen
+            Zeitplan-Helfer oder einen Kalender (Abschnitt 4). Ohne beides
+            bleibt die Vorlaufzeit wirkungslos – sie ist dann nicht kaputt,
+            es gibt nur nichts, worauf sie vorlaufen könnte.
+
+            0 = aus.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 1440
+              step: 15
+              unit_of_measurement: "min"
+              mode: box
+
+        vorlauf_helper:
+          name: "Vorlaufzeit – Helfer (überschreibt die Minuten)"
+          description: >-
+            Statt in jedem Raum eine Zahl zu pflegen: ein input_number-Helfer,
+            den sich mehrere Räume teilen – z. B. einer für alle
+            Fußbodenheizungen und einer für alle Heizkörper. Dann drehst du an
+            einer Stelle statt an zwanzig.
+
+            ⚠️ Der Helfer muss in MINUTEN sein, nicht in Stunden.
+
+            Ist hier etwas eingetragen, gilt nur der Helfer und die Zahl
+            darüber wird ignoriert. Nie beides zusammen.
+          default: []
+          selector:
+            entity:
+              multiple: true
+              filter:
+                domain: input_number
+
+        nachlauf_faktor:
+          name: "Nachlauf – Prozent der Vorlaufzeit"
+          description: >-
+            Das Gegenstück: rechtzeitig aufhören und die gespeicherte Wärme
+            auslaufen lassen, bevor abgesenkt wird. Bei Estrich sind das echte
+            Kilowattstunden.
+
+            Als Anteil der Vorlaufzeit, weil Auskühlen schneller geht als
+            Aufheizen – 50 % bei 480 Minuten Vorlauf heißt 240 Minuten
+            Nachlauf. Dreht sich automatisch mit, wenn du die Vorlaufzeit
+            änderst.
+
+            0 = aus. Empfehlung zum Einstieg: 50.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 100
+              step: 5
+              unit_of_measurement: "%"
+              mode: slider
+
         raumsensor:
           name: "Raumtemperatursensor"
           description: >-
@@ -109,8 +173,20 @@ blueprint:
       collapsed: true
       input:
         heizperiode:
-          name: "Heizperiode (Schalter)"
-          description: "Aus = Heizung aus bzw. Frostschutz. Leer = immer Heizperiode."
+          name: "Heizperiode – Hauptschalter fürs ganze Haus"
+          description: >-
+            Ein Schalter-Helfer, der sagt, ob überhaupt Heizsaison ist.
+            In allen Räumen denselben eintragen.
+
+            AN oder leer gelassen: der Raum wird ganz normal nach Stufe und
+            Zeitplan geregelt.
+
+            AUS: dieser Raum geht sofort auf Frostschutz (bzw. der Regler wird
+            ausgeschaltet, wenn er das kann). Das gilt vor allem anderen – auch
+            vor Fenster, Notbetrieb und manuellem Eingriff.
+
+            Er kann Heizen nur verhindern, nie erzwingen. Für "jetzt bitte warm"
+            ist die Stufe zuständig, nicht dieser Schalter.
           default: []
           selector:
             entity:
@@ -164,6 +240,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        komfort_kalender:
+          name: "Komfort – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Komfort“, solange der Termin läuft. z. B. "Besuch", "Feier" – Termine, bei denen es warm sein soll.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         eco_temp:
           name: "Eco/Nacht – Sollwert"
@@ -181,6 +268,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        eco_kalender:
+          name: "Eco/Nacht – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Eco/Nacht“, solange der Termin läuft. z. B. "Nachtschicht".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         abwesend_temp:
           name: "Abwesend – Sollwert"
@@ -198,6 +296,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        abwesend_kalender:
+          name: "Abwesend – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Abwesend“, solange der Termin läuft. z. B. "Dienstreise".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         urlaub_temp:
           name: "Urlaub – Sollwert"
@@ -215,6 +324,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        urlaub_kalender:
+          name: "Urlaub – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Urlaub“, solange der Termin läuft. z. B. "Urlaub" – bei Ferienwohnungen eher der Zeitraum OHNE Buchung.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         frei1_temp:
           name: "Freie Stufe 1 – Sollwert"
@@ -233,6 +353,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        frei1_kalender:
+          name: "Freie Stufe 1 – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 1“, solange der Termin läuft. z. B. "Gäste".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         frei2_temp:
           name: "Freie Stufe 2 – Sollwert"
@@ -249,6 +380,17 @@ blueprint:
           default: []
           selector:
             text: {multiple: true}
+        frei2_kalender:
+          name: "Freie Stufe 2 – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 2“, solange der Termin läuft.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 4.
+          default: ""
+          selector:
+            text: {}
+
 
         frostschutz_temp:
           name: "Frostschutz – Sollwert"
@@ -319,6 +461,31 @@ blueprint:
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_datetime}}
+
+        kalender:
+          name: "Kalender (optional)"
+          description: >-
+            Ein Kalender, mit dem sich Stufen für einen Zeitraum vorausplanen
+            lassen – Feier, Besuch, Urlaub, oder die Buchung einer
+            Ferienwohnung. Im Unterschied zur Modus-Quelle, die nur das Jetzt
+            kennt, hat ein Termin Anfang und Ende und lässt sich Wochen vorher
+            eintragen, auch von Leuten, die Home Assistant nie anfassen.
+
+            Welcher Termin welche Stufe auslöst, legst du über die
+            Kalender-Stichwörter in Abschnitt 3 fest. Lässt du dort alle leer,
+            zählt jeder Termin in diesem Kalender als Komfort – damit ist ein
+            eigener Kalender "Heizung" ohne weitere Einstellungen nutzbar.
+
+            Ein laufender Termin gewinnt gegen die Modus-Quelle. Fenster,
+            Notbetrieb, manueller Eingriff und die Heizperiode gewinnen
+            weiterhin gegen den Kalender.
+
+            Grenze: Eine Kalender-Entität zeigt immer nur einen Termin – den
+            laufenden, sonst den nächsten. Überlappende Termine lassen sich
+            damit nicht auflösen; dafür braucht es getrennte Kalender.
+          default: []
+          selector:
+            entity: {multiple: true, filter: {domain: calendar}}
 
     # ------------------------------------------------------------------
     sek_fenster:
@@ -542,6 +709,12 @@ triggers:
     entity_id: !input eco_ab
     id: zeitplan
   - trigger: state
+    entity_id: !input kalender
+    id: zeitplan
+  - trigger: state
+    entity_id: !input vorlauf_helper
+    id: zeitplan
+  - trigger: state
     entity_id: !input komfort_helper
     id: sollwert
   - trigger: state
@@ -577,6 +750,11 @@ variables:
   l_zeitplan: !input zeitplan_helper
   l_komfort_ab: !input komfort_ab
   l_eco_ab: !input eco_ab
+  l_kalender: !input kalender
+
+  i_vorlauf_min: !input vorlauf_min
+  h_vorlauf: !input vorlauf_helper
+  i_nachlauf_faktor: !input nachlauf_faktor
 
   t_komfort: !input komfort_temp
   t_eco: !input eco_temp
@@ -599,6 +777,13 @@ variables:
   s_urlaub: !input urlaub_states
   s_frei1: !input frei1_states
   s_frei2: !input frei2_states
+
+  k_komfort: !input komfort_kalender
+  k_eco: !input eco_kalender
+  k_abwesend: !input abwesend_kalender
+  k_urlaub: !input urlaub_kalender
+  k_frei1: !input frei1_kalender
+  k_frei2: !input frei2_kalender
 
   i_unbekannt_verhalten: !input unbekannt_verhalten
   i_unbekannt_limit: !input unbekannt_limit
@@ -639,6 +824,7 @@ variables:
   e_zeitplan: "{{ l_zeitplan | first | default('', true) }}"
   e_komfort_ab: "{{ l_komfort_ab | first | default('', true) }}"
   e_eco_ab: "{{ l_eco_ab | first | default('', true) }}"
+  e_kalender: "{{ l_kalender | first | default('', true) }}"
 
   raumname: >-
     {{ area_name(i_regler) or state_attr(i_regler, 'friendly_name') or i_regler }}
@@ -777,16 +963,128 @@ variables:
       komfort
     {% endif %}
 
+  # ---- Kalender ------------------------------------------------------
+  # Eine Kalender-Entität zeigt immer genau einen Termin: den laufenden,
+  # sonst den nächsten. Beides brauchen wir – den laufenden für die Stufe,
+  # den nächsten für den Vorlauf. Attribute fehlen bei leerem Kalender und
+  # bei "unavailable"; as_timestamp(..., 0) fängt das ab.
+  kal_laeuft: "{{ e_kalender != '' and is_state(e_kalender, 'on') }}"
+  kal_titel: >-
+    {{ (state_attr(e_kalender, 'message') | default('', true) | string | lower)
+       if e_kalender != '' else '' }}
+  kal_start: "{{ as_timestamp(state_attr(e_kalender, 'start_time'), 0) | int }}"
+  kal_ende: "{{ as_timestamp(state_attr(e_kalender, 'end_time'), 0) | int }}"
+
+  # Kein einziges Stichwort gesetzt = jeder Termin zählt als Komfort.
+  kal_ohne_stichwort: >-
+    {{ ((k_komfort | string) ~ (k_eco | string) ~ (k_abwesend | string)
+        ~ (k_urlaub | string) ~ (k_frei1 | string) ~ (k_frei2 | string))
+       | trim == '' }}
+
+  # Reihenfolge wie bei der Modus-Quelle: der erste Treffer gewinnt.
+  stufe_aus_titel: >-
+    {% if kal_titel == '' %}keine
+    {% elif (k_urlaub | string) | trim != '' and (k_urlaub | string) | lower in kal_titel %}urlaub
+    {% elif (k_abwesend | string) | trim != '' and (k_abwesend | string) | lower in kal_titel %}abwesend
+    {% elif (k_frei1 | string) | trim != '' and (k_frei1 | string) | lower in kal_titel %}frei1
+    {% elif (k_frei2 | string) | trim != '' and (k_frei2 | string) | lower in kal_titel %}frei2
+    {% elif (k_eco | string) | trim != '' and (k_eco | string) | lower in kal_titel %}eco
+    {% elif (k_komfort | string) | trim != '' and (k_komfort | string) | lower in kal_titel %}komfort
+    {% elif kal_ohne_stichwort %}komfort
+    {% else %}keine{% endif %}
+
+  stufe_kalender: "{{ stufe_aus_titel if kal_laeuft else 'keine' }}"
+
   # ---- Stufe final ---------------------------------------------------
-  stufe_roh: >-
+  # Ein laufender Termin gewinnt gegen die Modus-Quelle. Fenster, Notbetrieb,
+  # manueller Eingriff und Heizperiode gewinnen weiterhin gegen den Kalender
+  # – die stehen weiter oben in ziel_grund.
+  stufe_ohne_kalender: >-
     {% if stufe_modus in ['keine', 'komfort'] %}{{ stufe_zeitplan }}
     {% else %}{{ stufe_modus }}{% endif %}
 
+  stufe_roh: >-
+    {% if stufe_kalender != 'keine' %}{{ stufe_kalender }}
+    {% else %}{{ stufe_ohne_kalender }}{% endif %}
+
+  # ---- Vorlauf / Nachlauf --------------------------------------------
+  # Helfer gewinnt gegen die Zahl, nie beides.
+  vorlauf_min: >-
+    {{ ((states(h_vorlauf | first) | float(i_vorlauf_min | float(0)))
+        if h_vorlauf | count > 0 else (i_vorlauf_min | float(0)))
+       | round(0) | int }}
+  nachlauf_min: >-
+    {{ ((vorlauf_min | int) * (i_nachlauf_faktor | float(0)) / 100) | round(0) | int }}
+
+  # Sollwerte aller Stufen, um "wird es wärmer oder kälter" zu entscheiden.
+  soll_map: >-
+    {{ {
+      'komfort':  (states(h_komfort  | first) | float(t_komfort  | float)) if h_komfort  | count > 0 else (t_komfort  | float),
+      'eco':      (states(h_eco      | first) | float(t_eco      | float)) if h_eco      | count > 0 else (t_eco      | float),
+      'abwesend': (states(h_abwesend | first) | float(t_abwesend | float)) if h_abwesend | count > 0 else (t_abwesend | float),
+      'urlaub':   (states(h_urlaub   | first) | float(t_urlaub   | float)) if h_urlaub   | count > 0 else (t_urlaub   | float),
+      'frei1':    (states(h_frei1    | first) | float(t_frei1    | float)) if h_frei1    | count > 0 else (t_frei1    | float),
+      'frei2':    (states(h_frei2    | first) | float(t_frei2    | float)) if h_frei2    | count > 0 else (t_frei2    | float)
+    } }}
+
+  # Schaltpunkt aus dem Kalender: läuft ein Termin, ist sein Ende der
+  # Umschaltzeitpunkt (= Rückkehr aus dem Urlaub). Läuft keiner, ist der
+  # Beginn des nächsten der Umschaltzeitpunkt (= Anreise).
+  sp_kal_zeit: "{{ (kal_ende if kal_laeuft else kal_start) | int }}"
+  sp_kal_stufe: "{{ stufe_ohne_kalender if kal_laeuft else stufe_aus_titel }}"
+
+  # Schaltpunkt aus dem Zeitplan – nur wenn der Zeitplan die Stufe überhaupt
+  # bestimmt, also kein Termin läuft und die Modus-Quelle nichts vorgibt.
+  sp_zp_zeit: >-
+    {{ (as_timestamp(state_attr(e_zeitplan, 'next_event'), 0) | int)
+       if (e_zeitplan != '' and not kal_laeuft and stufe_modus in ['keine', 'komfort'])
+       else 0 }}
+  sp_zp_stufe: "{{ 'eco' if (e_zeitplan != '' and is_state(e_zeitplan, 'on')) else 'komfort' }}"
+
+  sp_kal_gilt: >-
+    {{ sp_kal_zeit | int > jetzt | int and sp_kal_stufe in soll_map
+       and (sp_zp_zeit | int <= jetzt | int or sp_kal_zeit | int <= sp_zp_zeit | int) }}
+  sp_zp_gilt: >-
+    {{ not sp_kal_gilt and sp_zp_zeit | int > jetzt | int }}
+
+  sp_zeit: >-
+    {% if sp_kal_gilt %}{{ sp_kal_zeit | int }}
+    {% elif sp_zp_gilt %}{{ sp_zp_zeit | int }}
+    {% else %}0{% endif %}
+  sp_stufe: >-
+    {% if sp_kal_gilt %}{{ sp_kal_stufe }}
+    {% elif sp_zp_gilt %}{{ sp_zp_stufe }}
+    {% else %}keine{% endif %}
+
+  sp_rest_s: "{{ (sp_zeit | int - jetzt | int) if sp_zeit | int > 0 else 0 }}"
+  sp_moeglich: >-
+    {{ sp_zeit | int > 0 and sp_stufe in soll_map and stufe_roh in soll_map
+       and sp_stufe != stufe_roh }}
+
+  vorlauf_greift: >-
+    {{ sp_moeglich and vorlauf_min | int > 0
+       and sp_rest_s | int <= (vorlauf_min | int * 60)
+       and soll_map[sp_stufe] | float > soll_map[stufe_roh] | float }}
+  nachlauf_greift: >-
+    {{ sp_moeglich and nachlauf_min | int > 0
+       and sp_rest_s | int <= (nachlauf_min | int * 60)
+       and soll_map[sp_stufe] | float < soll_map[stufe_roh] | float }}
+
+  stufe_vor: >-
+    {% if vorlauf_greift or nachlauf_greift %}{{ sp_stufe }}
+    {% else %}{{ stufe_roh }}{% endif %}
+
   stufe: >-
-    {% if stufe_roh != 'unbekannt' %}{{ stufe_roh }}
+    {% if stufe_vor != 'unbekannt' %}{{ stufe_vor }}
     {% elif i_unbekannt_verhalten == 'ersatzstufe' %}{{ i_ersatzstufe }}
     {% elif unbekannt_seit | int > 0
             and (jetzt | int - unbekannt_seit | int) > (i_unbekannt_limit | int * 60) %}{{ i_ersatzstufe }}
+    {% else %}{{ status.get('st', i_ersatzstufe) }}{% endif %}
+
+  # Im Status-Helfer wird die echte Stufe gemerkt, nicht die vorgezogene –
+  # sonst bliebe nach einem Neustart mitten im Vorlauf die falsche stehen.
+  stufe_merken: >-
+    {% if stufe_roh != 'unbekannt' %}{{ stufe_roh }}
     {% else %}{{ status.get('st', i_ersatzstufe) }}{% endif %}
 
   ersatzstufe_greift: >-
@@ -981,7 +1279,7 @@ actions:
                       entity_id: "{{ e_status }}"
                     data:
                       value: >-
-                        {{ {'v': 1, 'st': stufe, 'ov': neu_ov, 'ou': neu_ou | int,
+                        {{ {'v': 1, 'st': stufe_merken, 'ov': neu_ov, 'ou': neu_ou | int,
                             'os': stufe, 'wo': fenster_seit | int, 'wt': neu_wt,
                             'us': neu_us | int, 'n': status.get('n', '')} | to_json }}
           - stop: "Manueller Eingriff übernommen"
@@ -1135,7 +1433,7 @@ actions:
             data:
               value: >-
                 {{ {'v': 1,
-                    'st': stufe,
+                    'st': stufe_merken,
                     'ov': (ov_temp if override_aktiv else none),
                     'ou': (ov_bis | int if override_aktiv else 0),
                     'os': (ov_stufe if override_aktiv else ''),
