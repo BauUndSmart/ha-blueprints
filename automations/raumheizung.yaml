@@ -12,12 +12,18 @@ blueprint:
     2. Fenster offen
     3. Sensor-Wächter (Notbetrieb)
     4. Manueller Eingriff
-    5. Hausmodus (Urlaub / Abwesend / freie Stufen)
-    6. Zeitplan (Komfort / Eco)
-    7. Frostschutz als Untergrenze
+    5. Kalender (laufender Termin)
+    6. Hausmodus (Urlaub / Abwesend / freie Stufen)
+    7. Zeitplan (Komfort / Eco)
+    8. Frostschutz als Untergrenze
+
+    Vorlauf und Nachlauf stehen nicht in der Kette: Sie verschieben nur, ab wann
+    eine Stufe der Ebenen 5 bis 7 gilt – damit träge Fußbodenheizungen
+    rechtzeitig anfangen und rechtzeitig aufhören.
 
     Alles Optionale darf leer bleiben – fehlende Fensterkontakte, kein Zeitplan,
-    keine Modus-Quelle: der Blueprint überspringt die zugehörige Logik.
+    kein Kalender, keine Modus-Quelle: der Blueprint überspringt die zugehörige
+    Logik. Einzige Pflichtangabe ist der Regler.
 
     Doku: https://github.com/BauUndSmart/ha-blueprints/blob/main/docs/raumheizung.md
   domain: automation
