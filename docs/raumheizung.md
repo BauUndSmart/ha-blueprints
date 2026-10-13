@@ -10,14 +10,15 @@ Zurück zur [Übersicht](../README.md)
 2. [Vor dem Import: Helfer anlegen](#vor-dem-import-helfer-anlegen)
 3. [Der Einrichtungsdialog, Feld für Feld](#der-einrichtungsdialog-feld-für-feld)
 4. [Wie die Logik entscheidet](#wie-die-logik-entscheidet)
-5. [Vorlauf und Nachlauf](#vorlauf-und-nachlauf)
-6. [Fensterlogik im Detail](#fensterlogik-im-detail)
-7. [Sensor-Wächter und Notbetrieb](#sensor-wächter-und-notbetrieb)
-8. [Manueller Eingriff](#manueller-eingriff)
-9. [Meldungen](#meldungen)
-10. [Beispiele](#beispiele)
-11. [Bekannte Grenzen](#bekannte-grenzen)
-12. [FAQ](#faq)
+5. [Sollwert-Profile](#sollwert-profile)
+6. [Vorlauf und Nachlauf](#vorlauf-und-nachlauf)
+7. [Fensterlogik im Detail](#fensterlogik-im-detail)
+8. [Sensor-Wächter und Notbetrieb](#sensor-wächter-und-notbetrieb)
+9. [Manueller Eingriff](#manueller-eingriff)
+10. [Meldungen](#meldungen)
+11. [Beispiele](#beispiele)
+12. [Bekannte Grenzen](#bekannte-grenzen)
+13. [FAQ](#faq)
 
 ---
 
@@ -134,31 +135,62 @@ Diese drei wählst du in *jeder* Instanz gleich aus.
 | **Außentemperatur** | mittlere Fensterschwelle, fester Notbetriebs-Anteil |
 | **Modus-Quelle** | nur Zeitplan, also Komfort und Eco |
 
-### 3 · Stufen & Sollwerte
+### 3 · Temperaturen
 
-Für jede Stufe gibt es vier Felder:
+Pro Stufe zwei Felder:
 
 - **Sollwert** – die Zahl, die gilt
-- **Helfer** – überschreibt die Zahl, wenn gesetzt
+- **Helfer** – ein `input_number`. Ist er gesetzt, gilt **nur** er und die Zahl wird
+  ignoriert. Nie beides, nie addiert.
+
+Dass es den Helfer gibt, ist die wichtigste Einstellung im ganzen Blueprint, und sie
+fällt am leichtesten unter den Tisch. Siehe [Sollwert-Profile](#sollwert-profile).
+
+| Stufe | Default |
+|---|---|
+| Komfort | 21 °C |
+| Eco/Nacht | 18 °C |
+| Abwesend | 17 °C |
+| Urlaub | 15 °C |
+| Frei 1 / Frei 2 | 20 °C |
+| Frostschutz | 7 °C (Untergrenze und Fensteraktion) |
+
+**Sonderbereich.** Standard begrenzt alle Sollwerte auf 5–30 °C. Das Opt-in öffnet
+0–45 °C für Spezialfälle wie Terrarium, Anzucht oder frostfreies Gewächshaus. Es hebt
+damit auch den Schutz gegen Zahlendreher auf.
+
+> Bei Fußbodenheizung sind Raumsollwerte über etwa 26 °C praktisch nicht erreichbar.
+> Die zulässige Oberflächentemperatur im Aufenthaltsbereich liegt bei rund 29 °C.
+
+### 4 · Stufen-Zuordnung
+
+Dieser Abschnitt ist zugeklappt, und das ist Absicht: In fast jedem Raum steht hier
+dasselbe. Trag ihn einmal aus, dann übernimm ihn.
+
+Pro Stufe zwei Felder:
+
 - **Zustände der Modus-Quelle** – bei welchen Zuständen die Stufe greift
 - **Kalender-Stichwort** – bei welchem Termin die Stufe greift, siehe
   [Kalender](#kalender)
 
-Die letzten beiden beantworten dieselbe Frage aus zwei Richtungen: „bei welchem
-Signal gelte ich". Der Zustand beschreibt das Jetzt, der Termin einen geplanten
-Zeitraum.
+Beide beantworten dieselbe Frage aus zwei Richtungen: „bei welchem Signal gelte ich".
+Der Zustand beschreibt das Jetzt, der Termin einen geplanten Zeitraum.
 
-| Stufe | Default | Typische Zustände |
-|---|---|---|
-| Komfort | 21 °C | `Zuhause` · `disarmed`, `armed_home` |
-| Eco/Nacht | 18 °C | `Nacht` · `armed_night` |
-| Abwesend | 17 °C | `Abwesend` · `armed_away` |
-| Urlaub | 15 °C | `Urlaub` · `armed_vacation` |
-| Frei 1 / Frei 2 | 20 °C | frei, z. B. `Gäste` – inaktiv, solange keine Zustände eingetragen sind |
-| Frostschutz | 7 °C | – (Untergrenze und Fensteraktion) |
+Lässt du alles leer, gilt nur der Zeitplan – also Komfort und Eco.
+
+| Stufe | Typische Zustände |
+|---|---|
+| Komfort | `Zuhause` · `disarmed`, `armed_home` |
+| Eco/Nacht | `Nacht` · `armed_night` |
+| Abwesend | `Abwesend` · `armed_away` |
+| Urlaub | `Urlaub` · `armed_vacation` |
+| Frei 1 / Frei 2 | frei, z. B. `Gäste` – inaktiv, solange keine Zustände eingetragen sind |
 
 > **Schreibweise beachten.** Die Zustände müssen exakt passen, inklusive Groß- und
 > Kleinschreibung. Prüfen in *Entwicklerwerkzeuge → Zustände*.
+>
+> Und weil dieser Abschnitt in jedem Raum gleich ist: Ein Tippfehler hier ist ein
+> Tippfehler in **allen** Räumen. Einmal sorgfältig, dann übernehmen.
 
 **Unbekannter Zustand.** Steht die Modus-Quelle auf etwas, das in keiner Liste steht
 (z. B. `arming` bei einer Alarmanlage), hält der Blueprint die letzte Stufe. Dauert das
@@ -169,14 +201,7 @@ die Heizung nicht bei jedem Scharfschalten springen soll. Wichtig: „Letzte Stu
 meint nur die Stufen der Modus-Quelle. Ein Fenster-Frostschutz kann dort nie hängen
 bleiben.
 
-**Sonderbereich.** Standard begrenzt alle Sollwerte auf 5–30 °C. Das Opt-in öffnet
-0–45 °C für Spezialfälle wie Terrarium, Anzucht oder frostfreies Gewächshaus. Es hebt
-damit auch den Schutz gegen Zahlendreher auf.
-
-> Bei Fußbodenheizung sind Raumsollwerte über etwa 26 °C praktisch nicht erreichbar.
-> Die zulässige Oberflächentemperatur im Aufenthaltsbereich liegt bei rund 29 °C.
-
-### 4 · Zeitplan
+### 5 · Zeitplan
 
 | Variante | Kann Wochentage | Wann |
 |---|---|---|
@@ -197,7 +222,7 @@ Typische Fälle: eine Feier, Besuch über Weihnachten, eine Dienstreise, oder di
 Buchung einer Ferienwohnung.
 
 Welcher Termin welche Stufe auslöst, legst du über die **Kalender-Stichwörter** in
-Abschnitt 3 fest. Steht das Stichwort im Titel des Termins, gilt diese Stufe, solange
+Abschnitt 4 fest. Steht das Stichwort im Titel des Termins, gilt diese Stufe, solange
 der Termin läuft. Groß- und Kleinschreibung sind egal, Teiltreffer reichen.
 
 | Stichwörter | Wirkung |
@@ -216,7 +241,7 @@ und manueller Eingriff gewinnen weiterhin gegen den Kalender.
 > – den laufenden, und wenn keiner läuft, den nächsten. Überlappende Termine lassen
 > sich damit nicht auflösen. Wer das braucht, nimmt getrennte Kalender.
 
-### 5 · Fenster
+### 6 · Fenster
 
 | Feld | Default | Gilt für |
 |---|---|---|
@@ -231,7 +256,7 @@ und manueller Eingriff gewinnen weiterhin gegen den Kalender.
 **Fensteraktion „nur melden"** ist richtig bei mechanischen Thermostaten und bei
 Köpfen mit eigener Fenster-auf-Erkennung – sonst arbeiten zwei Systeme gegeneinander.
 
-### 6 · Manueller Eingriff
+### 7 · Manueller Eingriff
 
 | Variante | Wann sinnvoll |
 |---|---|
@@ -240,7 +265,7 @@ Köpfen mit eigener Fenster-auf-Erkennung – sonst arbeiten zwei Systeme gegene
 | Bis zum nächsten Moduswechsel | wenn er bis zum Verlassen des Hauses gelten soll |
 | Nicht zulassen | vermietete Einheiten, Räume ohne Eingriffsrecht |
 
-### 7 · Sensor-Wächter & Notbetrieb
+### 8 · Sensor-Wächter & Notbetrieb
 
 | Feld | Default | Hinweis |
 |---|---|---|
@@ -250,7 +275,7 @@ Köpfen mit eigener Fenster-auf-Erkennung – sonst arbeiten zwei Systeme gegene
 | Regler nicht erreichbar: melden nach | 15 min | ignoriert kurze Funk-Aussetzer |
 | Befehls-Quittierung | an | siehe unten |
 
-### 8 · Meldungen
+### 9 · Meldungen
 
 Statt eines festen Ziels trägst du hier **deine eigene Benachrichtigungs-Aktion** ein.
 Damit funktioniert der Blueprint mit der Companion-App genauso wie mit Telegram,
@@ -307,6 +332,81 @@ um weniger als 0,1 K vom Ziel ab, passiert nichts. Das schont Batterien und Funk
   Vorlauf-Helfer, Heizperiode
   oder einem Sollwert-Helfer
 - alle 15 Minuten zur Sicherheit – das heilt verpasste Ereignisse
+
+---
+
+## Sollwert-Profile
+
+Jede Stufe hat zwei Felder: eine Zahl und einen Helfer. Ein `input_number`-Helfer kann
+von **beliebig vielen Räumen gleichzeitig** benutzt werden, und darin steckt der
+ganze Trick. Du entscheidest pro Raum und pro Stufe neu, ob der Wert lokal gilt oder
+von außen kommt.
+
+### Einfamilienhaus
+
+Vier hausweite Helfer anlegen und in jedem Raum identisch eintragen:
+
+```
+input_number.soll_eco          18
+input_number.soll_abwesend     17
+input_number.soll_urlaub       15
+input_number.soll_frostschutz   7
+```
+
+Damit bleibt pro Raum **genau eine** Zahl, über die du wirklich nachdenken musst:
+Komfort. Schlafzimmer 18, Wohnzimmer 21, Bad 23.
+
+Dass Eco im Schlafzimmer 18,0 und im Wohnzimmer 17,5 sein soll, ist eine Frage, die
+sich niemand ernsthaft stellt. Komfort schon.
+
+### Mehrere Wohneinheiten oder Mieter
+
+Pro Einheit ein eigenes Profil:
+
+```
+input_number.komfort_eg          21,0
+input_number.komfort_wg_oben     20,5
+input_number.komfort_oma         23,0
+```
+
+Jeder Raum der jeweiligen Einheit zeigt auf seinen Helfer. Der Mieter ruft an und will
+ein halbes Grad mehr — du drehst **eine** Zahl, alle seine Räume folgen, die anderen
+Einheiten merken nichts.
+
+Für gewerbliche Vermietung funktioniert es genauso: ein Profil pro Mietpartei.
+
+### Einzelne Räume dürfen trotzdem abweichen
+
+Das ist kein Entweder-Oder auf Hausebene. Das Bad einer Einheit darf eine feste 23
+haben, während die anderen sieben Räume am gemeinsamen Helfer hängen. Lass dort
+einfach das Helfer-Feld leer und trag die Zahl ein.
+
+### ⚠️ Keine Climate-Gruppe als Regler
+
+Es liegt nahe, statt vieler Instanzen eine Gruppe aller Heizkörper einer Einheit als
+Regler einzutragen. **Tu das nicht.**
+
+Erstens kann der Group-Helfer in Home Assistant gar keine `climate`-Entitäten – nur
+die alten YAML-Gruppen oder eine Zusatzintegration aus HACS.
+
+Zweitens, und das ist der eigentliche Grund: Der Blueprint liest vom Regler die
+Ist-Temperatur, braucht einen Raumsensor für den Wächter und hat eigene
+Fensterkontakte. **Fünf Heizkörper in fünf Räumen haben keine gemeinsame
+Raumtemperatur und kein gemeinsames Fenster.** Die Fensterlogik würde sinnlos, die
+Abfallerkennung Unsinn, und der Sensor-Wächter überwachte einen Mittelwert, den es
+nirgends gibt.
+
+Der Blueprint steht auf einem Satz: **eine Instanz pro Regelzone.** Ein Mieter ist
+keine Regelzone, ein Raum ist eine.
+
+> **Den Sollwert teilen – nie die Instanz.**
+
+### Was sich so nicht teilen lässt
+
+Nur Zahlen. Die Felder in [4 · Stufen-Zuordnung](#4--stufen-zuordnung) sind Textlisten
+und damit nicht über eine Entität teilbar — die stehen in jedem Raum einzeln drin.
+Deshalb ist dieser Abschnitt zugeklappt und deshalb steht dort die Warnung, ihn einmal
+sorgfältig auszufüllen.
 
 ---
 

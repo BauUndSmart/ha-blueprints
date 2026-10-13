@@ -76,7 +76,7 @@ blueprint:
             Heizkörper 30–60.
 
             Braucht einen bekannten Zeitpunkt in der Zukunft, also einen
-            Zeitplan-Helfer oder einen Kalender (Abschnitt 4). Ohne beides
+            Zeitplan-Helfer oder einen Kalender (Abschnitt 5). Ohne beides
             bleibt die Vorlaufzeit wirkungslos – sie ist dann nicht kaputt,
             es gibt nur nichts, worauf sie vorlaufen könnte.
 
@@ -225,122 +225,67 @@ blueprint:
               multiple: true
 
     # ------------------------------------------------------------------
-    sek_stufen:
-      name: "3 · Stufen & Sollwerte"
-      icon: mdi:thermometer-lines
-      collapsed: true
+    # ------------------------------------------------------------------
+    sek_temperaturen:
+      name: "3 · Temperaturen"
+      icon: mdi:thermometer
+      collapsed: false
+      description: >-
+        Pro Stufe entweder eine feste Zahl ODER einen Helfer. Ist ein Helfer
+        eingetragen, gilt nur der Helfer.
+
+        Den Helfer können sich beliebig viele Räume teilen – ein
+        input_number.komfort_mieter1 für alle Räume eines Mieters, und du drehst
+        eine Zahl statt zwanzig. Einzelne Räume dürfen trotzdem abweichen.
+        Siehe "Sollwert-Profile" in der Doku.
       input:
         komfort_temp:
           name: "Komfort – Sollwert"
           default: 21
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         komfort_helper:
           name: "Komfort – Helfer (überschreibt den Sollwert)"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        komfort_states:
-          name: "Komfort – Zustände der Modus-Quelle"
-          description: 'z. B. "Zuhause" · bei Alarmanlagen: disarmed, armed_home'
-          default: []
-          selector:
-            text: {multiple: true}
-        komfort_kalender:
-          name: "Komfort – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Komfort“, solange der Termin läuft. z. B. "Besuch", "Feier" – Termine, bei denen es warm sein soll.
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         eco_temp:
           name: "Eco/Nacht – Sollwert"
           default: 18
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         eco_helper:
           name: "Eco/Nacht – Helfer"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        eco_states:
-          name: "Eco/Nacht – Zustände der Modus-Quelle"
-          description: 'z. B. "Nacht" · armed_night'
-          default: []
-          selector:
-            text: {multiple: true}
-        eco_kalender:
-          name: "Eco/Nacht – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Eco/Nacht“, solange der Termin läuft. z. B. "Nachtschicht".
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         abwesend_temp:
           name: "Abwesend – Sollwert"
           default: 17
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         abwesend_helper:
           name: "Abwesend – Helfer"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        abwesend_states:
-          name: "Abwesend – Zustände der Modus-Quelle"
-          description: 'z. B. "Abwesend" · armed_away'
-          default: []
-          selector:
-            text: {multiple: true}
-        abwesend_kalender:
-          name: "Abwesend – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Abwesend“, solange der Termin läuft. z. B. "Dienstreise".
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         urlaub_temp:
           name: "Urlaub – Sollwert"
           default: 15
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         urlaub_helper:
           name: "Urlaub – Helfer"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        urlaub_states:
-          name: "Urlaub – Zustände der Modus-Quelle"
-          description: 'z. B. "Urlaub" · armed_vacation'
-          default: []
-          selector:
-            text: {multiple: true}
-        urlaub_kalender:
-          name: "Urlaub – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Urlaub“, solange der Termin läuft. z. B. "Urlaub" – bei Ferienwohnungen eher der Zeitraum OHNE Buchung.
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         frei1_temp:
           name: "Freie Stufe 1 – Sollwert"
@@ -348,55 +293,24 @@ blueprint:
           default: 20
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         frei1_helper:
           name: "Freie Stufe 1 – Helfer"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        frei1_states:
-          name: "Freie Stufe 1 – Zustände der Modus-Quelle"
-          description: 'z. B. "Gäste", "Party", armed_custom_bypass'
-          default: []
-          selector:
-            text: {multiple: true}
-        frei1_kalender:
-          name: "Freie Stufe 1 – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 1“, solange der Termin läuft. z. B. "Gäste".
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         frei2_temp:
           name: "Freie Stufe 2 – Sollwert"
           default: 20
           selector:
             number: {min: 0, max: 45, step: 0.5, unit_of_measurement: "°C", mode: box}
+
         frei2_helper:
           name: "Freie Stufe 2 – Helfer"
           default: []
           selector:
             entity: {multiple: true, filter: {domain: input_number}}
-        frei2_states:
-          name: "Freie Stufe 2 – Zustände der Modus-Quelle"
-          default: []
-          selector:
-            text: {multiple: true}
-        frei2_kalender:
-          name: "Freie Stufe 2 – Kalender-Stichwort"
-          description: >-
-            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 2“, solange der Termin läuft.
-
-            Groß-/Kleinschreibung egal, Teiltreffer reichen.
-            Braucht einen Kalender in Abschnitt 4.
-          default: ""
-          selector:
-            text: {}
-
 
         frostschutz_temp:
           name: "Frostschutz – Sollwert"
@@ -404,6 +318,134 @@ blueprint:
           default: 7
           selector:
             number: {min: 0, max: 15, step: 0.5, unit_of_measurement: "°C", mode: box}
+
+        sonderbereich:
+          name: "Sonderbereich erlauben (0–45 °C)"
+          description: >-
+            Standard begrenzt alle Sollwerte auf 5–30 °C. Einschalten nur für
+            Spezialfälle (Terrarium, Anzucht, frostfreies Gewächshaus).
+            ACHTUNG: hebt den Schutz gegen Fehleingaben auf.
+          default: false
+          selector:
+            boolean:
+
+    # ------------------------------------------------------------------
+    sek_zuordnung:
+      name: "4 · Stufen-Zuordnung"
+      icon: mdi:shuffle-variant
+      collapsed: true
+      description: >-
+        Bei welchem Signal welche Stufe gilt. Dieser Abschnitt ist in jedem Raum
+        üblicherweise identisch – trag ihn einmal aus und übernimm ihn.
+
+        Alles leer: Es gilt nur der Zeitplan, also Komfort und Eco.
+      input:
+        komfort_states:
+          name: "Komfort – Zustände der Modus-Quelle"
+          description: 'z. B. "Zuhause" · bei Alarmanlagen: disarmed, armed_home'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        komfort_kalender:
+          name: "Komfort – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Komfort“, solange der Termin läuft. z. B. "Besuch", "Feier" – Termine, bei denen es warm sein soll.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
+
+        eco_states:
+          name: "Eco/Nacht – Zustände der Modus-Quelle"
+          description: 'z. B. "Nacht" · armed_night'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        eco_kalender:
+          name: "Eco/Nacht – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Eco/Nacht“, solange der Termin läuft. z. B. "Nachtschicht".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
+
+        abwesend_states:
+          name: "Abwesend – Zustände der Modus-Quelle"
+          description: 'z. B. "Abwesend" · armed_away'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        abwesend_kalender:
+          name: "Abwesend – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Abwesend“, solange der Termin läuft. z. B. "Dienstreise".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
+
+        urlaub_states:
+          name: "Urlaub – Zustände der Modus-Quelle"
+          description: 'z. B. "Urlaub" · armed_vacation'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        urlaub_kalender:
+          name: "Urlaub – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Urlaub“, solange der Termin läuft. z. B. "Urlaub" – bei Ferienwohnungen eher der Zeitraum OHNE Buchung.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
+
+        frei1_states:
+          name: "Freie Stufe 1 – Zustände der Modus-Quelle"
+          description: 'z. B. "Gäste", "Party", armed_custom_bypass'
+          default: []
+          selector:
+            text: {multiple: true}
+
+        frei1_kalender:
+          name: "Freie Stufe 1 – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 1“, solange der Termin läuft. z. B. "Gäste".
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
+
+        frei2_states:
+          name: "Freie Stufe 2 – Zustände der Modus-Quelle"
+          default: []
+          selector:
+            text: {multiple: true}
+
+        frei2_kalender:
+          name: "Freie Stufe 2 – Kalender-Stichwort"
+          description: >-
+            Steht dieses Wort im Titel eines Termins, gilt „Freie Stufe 2“, solange der Termin läuft.
+
+            Groß-/Kleinschreibung egal, Teiltreffer reichen.
+            Braucht einen Kalender in Abschnitt 5.
+          default: ""
+          selector:
+            text: {}
 
         unbekannt_verhalten:
           name: "Modus-Quelle in unbekanntem Zustand"
@@ -432,19 +474,10 @@ blueprint:
             select:
               options: [komfort, eco, abwesend, urlaub, frostschutz]
 
-        sonderbereich:
-          name: "Sonderbereich erlauben (0–45 °C)"
-          description: >-
-            Standard begrenzt alle Sollwerte auf 5–30 °C. Einschalten nur für
-            Spezialfälle (Terrarium, Anzucht, frostfreies Gewächshaus).
-            ACHTUNG: hebt den Schutz gegen Fehleingaben auf.
-          default: false
-          selector:
-            boolean:
 
     # ------------------------------------------------------------------
     sek_zeitplan:
-      name: "4 · Zeitplan"
+      name: "5 · Zeitplan"
       icon: mdi:calendar-clock
       collapsed: true
       input:
@@ -478,7 +511,7 @@ blueprint:
             eintragen, auch von Leuten, die Home Assistant nie anfassen.
 
             Welcher Termin welche Stufe auslöst, legst du über die
-            Kalender-Stichwörter in Abschnitt 3 fest. Lässt du dort alle leer,
+            Kalender-Stichwörter in Abschnitt 4 fest. Lässt du dort alle leer,
             zählt jeder Termin in diesem Kalender als Komfort – damit ist ein
             eigener Kalender "Heizung" ohne weitere Einstellungen nutzbar.
 
@@ -495,7 +528,7 @@ blueprint:
 
     # ------------------------------------------------------------------
     sek_fenster:
-      name: "5 · Fenster"
+      name: "6 · Fenster"
       icon: mdi:window-open-variant
       collapsed: true
       input:
@@ -571,7 +604,7 @@ blueprint:
 
     # ------------------------------------------------------------------
     sek_manuell:
-      name: "6 · Manueller Eingriff"
+      name: "7 · Manueller Eingriff"
       icon: mdi:hand-back-right
       collapsed: true
       input:
@@ -597,7 +630,7 @@ blueprint:
 
     # ------------------------------------------------------------------
     sek_waechter:
-      name: "7 · Sensor-Wächter & Notbetrieb"
+      name: "8 · Sensor-Wächter & Notbetrieb"
       icon: mdi:shield-alert
       collapsed: true
       input:
@@ -643,7 +676,7 @@ blueprint:
 
     # ------------------------------------------------------------------
     sek_meldungen:
-      name: "8 · Meldungen"
+      name: "9 · Meldungen"
       icon: mdi:bell-outline
       collapsed: true
       input:
