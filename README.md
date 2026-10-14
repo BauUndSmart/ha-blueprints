@@ -3,6 +3,9 @@
 Blueprints, die ich für mein eigenes Haus gebaut habe und die deshalb am lebenden
 Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.com) (sooon).
 
+Entstanden in Zusammenarbeit mit Claude. Die Idee, die Erfahrung aus dem eigenen Haus
+und die Entscheidungen sind meine, die Umsetzung in Code haben wir gemeinsam gemacht.
+
 ---
 
 ## Raumheizung
@@ -52,6 +55,9 @@ den Import-Knopf. Ein leer wirkendes Fenster ist also normal.
   lässt sich von Leuten pflegen, die Home Assistant nie öffnen
 - **Vorlauf und Nachlauf:** träge Räume fangen rechtzeitig an und hören rechtzeitig
   auf. Minuten pro Raum oder ein geteilter Helfer für alle Räume einer Bauart
+- **Sollwert-Profile:** jeder Sollwert ist entweder eine Zahl für diesen Raum oder ein
+  Helfer, den sich beliebig viele Räume teilen. Ein Profil je Wohneinheit oder Mieter –
+  eine Zahl drehen, alle zugehörigen Räume folgen, einzelne dürfen abweichen
 - **Fensterlogik, nach Außentemperatur gestaffelt:** je kälter, desto früher die
   Meldung. Bei der Fußbodenheizung erst ein Hinweis, erst später ein Eingriff
 - **Sensor-Wächter mit Notbetrieb:** erkennt tote, veraltete und unplausible Sensoren
@@ -103,7 +109,7 @@ Ein Blueprint kann keine Helfer erzeugen. Je nachdem, was du nutzen willst:
 |---|---|---|
 | Heizperiode | `input_boolean` | hausweit, einmal |
 | Modus-Quelle | `input_select` | hausweit oder je Wohneinheit |
-| Sollwerte | `input_number` | je Stufe, wenn am Dashboard änderbar |
+| Sollwerte | `input_number` | je Stufe – und als geteiltes Profil, siehe Doku |
 | Zeitplan | `schedule` | je Wohneinheit oder Raum |
 | Vorlaufzeit | `input_number` **in Minuten** | optional, einer je Heizungsbauart |
 | **Status-Helfer** | `input_text`, **Maximallänge 255** | je Raum |
