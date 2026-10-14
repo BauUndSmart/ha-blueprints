@@ -3,9 +3,6 @@
 Blueprints, die ich für mein eigenes Haus gebaut habe und die deshalb am lebenden
 Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.com) (sooon).
 
-Entstanden in Zusammenarbeit mit Claude. Die Idee, die Erfahrung aus dem eigenen Haus
-und die Entscheidungen sind meine, die Umsetzung in Code haben wir gemeinsam gemacht, da ich noch lerne.
-
 ---
 
 ## Raumheizung
@@ -154,3 +151,7 @@ Die Blueprints steuern eine Heizung. Fehlfunktionen können zu ausgekühlten ode
 überheizten Räumen führen. Nutzung auf eigene Verantwortung – prüfe die Einstellungen,
 bevor du dich im Winter darauf verlässt, und sichere dich auf Geräteebene ab
 (siehe [docs/ausfallsicherheit.md](docs/ausfallsicherheit.md)).
+
+Transparenzhinweis:
+Entstanden in Zusammenarbeit mit Claude. Die Idee, die Erfahrung aus dem eigenen Haus
+und die Entscheidungen sind meine, die Umsetzung in Code haben wir gemeinsam gemacht, da ich noch lerne.
