@@ -3,6 +3,9 @@
 Blueprints, die ich für mein eigenes Haus gebaut habe und die deshalb am lebenden
 Patienten entstanden sind. Mehr dazu auf [bauundsmart.com](https://bauundsmart.com) (sooon).
 
+Entstanden in Zusammenarbeit mit Claude. Die Idee, die Erfahrung aus dem eigenen Haus
+und die Entscheidungen sind meine, die Umsetzung in Code haben wir gemeinsam gemacht.
+
 ---
 
 ## Raumheizung
