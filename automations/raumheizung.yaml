@@ -920,15 +920,31 @@ variables:
   fenster_vorhanden: "{{ l_fenster | count > 0 }}"
   fenster_offen: >-
     {{ fenster_vorhanden and (l_fenster | expand | selectattr('state', 'eq', 'on') | list | count) > 0 }}
+  # Mindestens ein Kontakt meldet weder on noch off (unavailable/unknown).
+  # Dann ist der Fensterzustand nicht bekannt -- und nicht "zu".
+  fenster_unklar: >-
+    {{ fenster_vorhanden and (l_fenster | expand
+        | rejectattr('state', 'in', ['on', 'off']) | list | count) > 0 }}
+  # Nur hier darf das Gedaechtnis geloescht werden: alle Kontakte melden off.
+  fenster_bekannt_zu: >-
+    {{ fenster_vorhanden and not fenster_offen and not fenster_unklar }}
+  # Gemerkter Oeffnungszeitpunkt aus dem Status-Helfer.
+  fenster_gemerkt: "{{ status.get('wo', 0) | int }}"
+  # last_changed wird beim Wiederherstellen nach einem Neustart auf die
+  # Startzeit gesetzt. Deshalb gilt der fruehere der beiden Werte.
   fenster_seit: >-
     {% if fenster_offen %}
-      {{ (l_fenster | expand | selectattr('state', 'eq', 'on')
-          | map(attribute='last_changed') | list | min).timestamp() | int }}
-    {% else %}
+      {% set lc = (l_fenster | expand | selectattr('state', 'eq', 'on')
+                   | map(attribute='last_changed') | list | min).timestamp() | int %}
+      {% if fenster_gemerkt | int > 0 %}{{ [lc, fenster_gemerkt | int] | min }}
+      {% else %}{{ lc }}{% endif %}
+    {% elif fenster_bekannt_zu %}
       0
+    {% else %}
+      {{ fenster_gemerkt | int }}
     {% endif %}
   fenster_zu_seit: >-
-    {% if fenster_vorhanden and not fenster_offen %}
+    {% if fenster_bekannt_zu %}
       {{ (l_fenster | expand | map(attribute='last_changed') | list | max).timestamp() | int }}
     {% else %}
       0
@@ -1257,9 +1273,10 @@ variables:
 
   # ---- Neuer Status --------------------------------------------------
   neu_wt: >-
-    {% if not fenster_offen %}{{ none }}
+    {% if fenster_bekannt_zu %}{{ none }}
     {% elif temp_bei_oeffnung is not none %}{{ temp_bei_oeffnung }}
-    {% else %}{{ ist_temp }}{% endif %}
+    {% elif fenster_offen %}{{ ist_temp }}
+    {% else %}{{ none }}{% endif %}
   neu_us: >-
     {% if stufe_roh != 'unbekannt' %}0
     {% elif unbekannt_seit | int > 0 %}{{ unbekannt_seit }}

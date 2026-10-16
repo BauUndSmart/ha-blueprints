@@ -532,6 +532,48 @@ Was wirklich zählt, sind zwei messbare Größen:
 
 Was zuerst eintritt, gilt.
 
+### Türen in der Kontaktliste
+
+Der Abfall-Weg kennt **keine Zeitschwelle**. In einem ruhigen Raum ist das richtig:
+1,5 K Abfall heißt, dass jemand ernsthaft lüftet, egal wie lange das Fenster schon auf
+ist.
+
+Hängt dagegen eine viel benutzte Tür in der Kontaktliste – Haustür, Terrassentür –,
+bedeutet derselbe Abfall nur, dass jemand nach Hause gekommen ist. Bei Frost reichen
+dafür zwei Minuten, besonders wenn der Raumsensor in der Nähe hängt.
+
+**In solchen Räumen soll die Zeitschwelle führen.** Setz die beiden Abfallschwellen
+hoch, etwa auf **3,0 K** für den Hinweis und **5,0 K** für den Eingriff. Die
+Zeitschwellen bleiben, wie sie sind – sie erwischen den Fall, auf den es ankommt: die
+Tür, die offen stehen geblieben ist.
+
+### Die Uhr überlebt Neustarts und Funklöcher
+
+Der Blueprint merkt sich den Öffnungszeitpunkt im Status-Helfer (`wo`) und rechnet die
+Dauer aus dem **früheren** von zwei Werten: dem gemerkten Zeitpunkt und dem letzten
+Zustandswechsel des Kontakts.
+
+Das ist nötig, weil Home Assistant den letzten Zustandswechsel beim Neustart auf die
+Startzeit setzt. Ohne das Gedächtnis würde die Eskalation nach jedem Update bei null
+anfangen – und ein dauerhaft offenes Fenster erreicht die Eingriffsschwelle dann nie.
+
+Aus demselben Grund gilt ein Kontakt, der `unavailable` oder `unknown` meldet, **nicht
+als geschlossen**:
+
+| Zustand der Kontakte | Fenster gilt als | Gedächtnis |
+|---|---|---|
+| mindestens einer `on` | offen | bleibt, Dauer ab dem früheren Zeitpunkt |
+| alle `off` | zu | wird gelöscht |
+| einer `unavailable` / `unknown` | nicht offen, aber auch nicht zu | **bleibt erhalten** |
+
+Ein kurzer Funkaussetzer oder ein Neustart löscht die Uhr also nicht mehr. Kommt der
+Kontakt als `on` zurück, läuft die Eskalation vom echten Öffnungszeitpunkt weiter.
+
+> **Der Preis dafür:** Wird das Fenster geschlossen *und* wieder geöffnet, während der
+> Kontakt nicht erreichbar war, zählt der Blueprint zu lange. Das ist die bewusst
+> gewählte Richtung – lieber einmal zu früh melden als eine offene Tür im Januar
+> übersehen.
+
 ---
 
 ## Sensor-Wächter und Notbetrieb
@@ -699,7 +741,9 @@ hört die Heizung auf und die Restwärme reicht bis zur Abreise.
 
 ## Bekannte Grenzen
 
-- **Ohne Status-Helfer gibt es kein Gedächtnis über einen Neustart hinaus.**
+- **Ohne Status-Helfer gibt es kein Gedächtnis über einen Neustart hinaus.** Das trifft
+  auch die Fensteruhr: Sie fängt dann nach jedem Neustart wieder bei null an. Wer
+  Updates regelmäßig einspielt, sollte den Helfer anlegen.
 - **Der Blueprint kann Home Assistant nicht ersetzen.** Fällt HA aus, regelt niemand
   mehr – siehe [ausfallsicherheit.md](ausfallsicherheit.md).
 - **Ein externer Sensor im Thermostatkopf** (eingespeist über Zigbee2MQTT oder
